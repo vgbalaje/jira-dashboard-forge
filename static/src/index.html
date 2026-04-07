@@ -283,9 +283,9 @@ function resetFilters() {
 // ── Export to Excel ──
 function exportToExcel() {
   if (!currentData) return;
+  var headers = ['Key','Type','Summary','Status','Priority','Assignee','Age (days)','Due Date','Labels','Latest Comment'];
   var rows = document.querySelectorAll('#tableBody tr');
-  var csvRows = [];
-  csvRows.push(['Key','Type','Summary','Status','Priority','Assignee','Age (days)','Due Date','Labels','Latest Comment'].join('\t'));
+  var dataRows = [];
   rows.forEach(function(row) {
     if (row.style.display === 'none') return;
     var cells = row.querySelectorAll('td');
@@ -293,9 +293,45 @@ function exportToExcel() {
     for (var i = 0; i < cells.length; i++) {
       vals.push(cells[i].textContent.trim().replace(/[\t\n\r]+/g, ' '));
     }
-    csvRows.push(vals.join('\t'));
+    dataRows.push(vals);
   });
-  var blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'application/vnd.ms-excel;charset=utf-8' });
+
+  function escXml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<?mso-application progid="Excel.Sheet"?>\n' +
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n' +
+    ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n' +
+    '<Styles>\n' +
+    '  <Style ss:ID="header"><Font ss:Bold="1" ss:Size="11" ss:Color="#FFFFFF"/><Interior ss:Color="#0065FF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#003D99"/></Borders></Style>\n' +
+    '  <Style ss:ID="cell"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:Size="10"/></Style>\n' +
+    '  <Style ss:ID="link"><Font ss:Size="10" ss:Color="#0065FF" ss:Underline="Single"/><Alignment ss:Vertical="Top"/></Style>\n' +
+    '  <Style ss:ID="bold"><Font ss:Size="10" ss:Bold="1"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>\n' +
+    '</Styles>\n' +
+    '<Worksheet ss:Name="' + escXml(currentData.project) + ' Issues">\n' +
+    '<Table>\n' +
+    '  <Column ss:Width="80"/><Column ss:Width="60"/><Column ss:Width="300"/><Column ss:Width="140"/><Column ss:Width="80"/><Column ss:Width="140"/><Column ss:Width="70"/><Column ss:Width="90"/><Column ss:Width="120"/><Column ss:Width="200"/>\n';
+
+  xml += '  <Row ss:Height="28">';
+  headers.forEach(function(h) {
+    xml += '<Cell ss:StyleID="header"><Data ss:Type="String">' + escXml(h) + '</Data></Cell>';
+  });
+  xml += '</Row>\n';
+
+  dataRows.forEach(function(vals) {
+    xml += '  <Row>';
+    vals.forEach(function(v, i) {
+      var style = i === 0 ? 'link' : (i === 4 ? 'bold' : 'cell');
+      var type = i === 6 ? 'Number' : 'String';
+      var val = i === 6 ? v.replace(/[^0-9]/g, '') : v;
+      xml += '<Cell ss:StyleID="' + style + '"><Data ss:Type="' + type + '">' + escXml(val) + '</Data></Cell>';
+    });
+    xml += '</Row>\n';
+  });
+
+  xml += '</Table>\n</Worksheet>\n</Workbook>';
+
+  var blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
