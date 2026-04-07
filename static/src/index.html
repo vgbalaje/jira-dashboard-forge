@@ -51,6 +51,10 @@
 <div class="filters" id="filtersBar">
   <span class="filter-label">Filter:</span>
   <button class="reset-btn" id="resetBtn">Reset</button>
+  <button class="export-btn" id="exportBtn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export Excel
+  </button>
   <span class="result-count" id="resultCount"></span>
 </div>
 
@@ -79,27 +83,34 @@
 </div><!-- /mainContent -->
 
 <script>
-// ── Forge Bridge (loaded via app.js) ──
-// invoke is set globally by app.js
+// ── Hardcoded hex colors (Forge CSP may block var() in inline styles) ──
+var C = {
+  red:'#dc2626', orange:'#ea580c', yellow:'#a16207', green:'#15803d',
+  blue:'#2563eb', indigo:'#6366f1', cyan:'#0891b2', muted:'#5c636a',
+  text:'#1a1a2e', muted2:'#6e7781',
+  redBg:'#fecaca', orangeBg:'#fed7aa', yellowBg:'#fde68a', greenBg:'#bbf7d0',
+  blueBg:'#bfdbfe', indigoBg:'#c7d2fe', cyanBg:'#a5f3fc', mutedBg:'#e9ecef',
+  surface2:'#f1f3f5'
+};
 
 // ── State ──
-let currentData = null;
-let filterDefs = {};
-let sortCol = -1;
-let sortDir = 1;
-const priorityOrder = {critical:0,highest:0,high:1,medium:2,low:3,lowest:4};
-const ageOrder = {fresh:0,ageing:1,stale:2,critical:3};
+var currentData = null;
+var filterDefs = {};
+var sortCol = -1;
+var sortDir = 1;
+var priorityOrder = {critical:0,highest:0,high:1,medium:2,low:3,lowest:4};
 
-const priorityColor = {Critical:'var(--red)',Highest:'var(--red)',High:'var(--orange)',Medium:'var(--yellow)',Low:'var(--green)',Lowest:'var(--muted)'};
-const priorityDim = {Critical:'var(--red-dim)',Highest:'var(--red-dim)',High:'var(--orange-dim)',Medium:'var(--yellow-dim)',Low:'var(--green-dim)',Lowest:'var(--surface2)'};
-const statusColor = {'To Do':'var(--muted)',Blocked:'var(--red)','In Progress':'var(--blue)','Code Review':'var(--indigo)','Deploy to QA':'var(--cyan)','QA Ready to Test':'var(--cyan)','QA in Test':'var(--cyan)','UAT Test Ready':'var(--cyan)','UAT in TEST':'var(--cyan)','Ready To Demo':'var(--green)'};
-const statusDim = {'To Do':'var(--surface2)',Blocked:'var(--red-dim)','In Progress':'var(--blue-dim)','Code Review':'var(--indigo-dim)','Deploy to QA':'var(--blue-dim)','QA Ready to Test':'var(--blue-dim)','QA in Test':'var(--blue-dim)','UAT Test Ready':'var(--blue-dim)','UAT in TEST':'var(--blue-dim)','Ready To Demo':'var(--green-dim)'};
-const ageColor = {fresh:'var(--green)',ageing:'var(--yellow)',stale:'var(--orange)',critical:'var(--red)'};
-const ageDimColor = {fresh:'var(--green-dim)',ageing:'var(--yellow-dim)',stale:'var(--orange-dim)',critical:'var(--red-dim)'};
+var priorityColor = {Critical:C.red,Highest:C.red,High:C.orange,Medium:C.yellow,Low:C.green,Lowest:C.muted};
+var priorityBg = {Critical:C.redBg,Highest:C.redBg,High:C.orangeBg,Medium:C.yellowBg,Low:C.greenBg,Lowest:C.mutedBg};
+var statusColor = {'To Do':C.muted,Blocked:C.red,'In Progress':C.blue,'Code Review':C.indigo,'Deploy to QA':C.cyan,'QA Ready to Test':C.cyan,'QA in Test':C.cyan,'UAT Test Ready':C.cyan,'UAT in TEST':C.cyan,'Ready To Demo':C.green};
+var statusBg = {'To Do':C.mutedBg,Blocked:C.redBg,'In Progress':C.blueBg,'Code Review':C.indigoBg,'Deploy to QA':C.cyanBg,'QA Ready to Test':C.cyanBg,'QA in Test':C.cyanBg,'UAT Test Ready':C.cyanBg,'UAT in TEST':C.cyanBg,'Ready To Demo':C.greenBg};
+var ageColor = {fresh:C.green,ageing:C.yellow,stale:C.orange,critical:C.red};
+var ageBg = {fresh:C.greenBg,ageing:C.yellowBg,stale:C.orangeBg,critical:C.redBg};
 
-// ── Event Listeners (no inline handlers — Forge CSP blocks them) ──
+// ── Event Listeners ──
 document.getElementById('refreshBtn').addEventListener('click', function() { loadData(); });
 document.getElementById('resetBtn').addEventListener('click', function() { resetFilters(); });
+document.getElementById('exportBtn').addEventListener('click', function() { exportToExcel(); });
 document.querySelectorAll('#mainTable thead th[data-col]').forEach(function(th) {
   th.addEventListener('click', function() { sortTable(parseInt(th.getAttribute('data-col'))); });
 });
@@ -111,10 +122,10 @@ document.addEventListener('click', function(e) {
 
 // ── Init ──
 async function init() {
-  const projects = await invoke('getProjects');
-  const select = document.getElementById('projectSelect');
+  var projects = await invoke('getProjects');
+  var select = document.getElementById('projectSelect');
   projects.forEach(function(p) {
-    const opt = document.createElement('option');
+    var opt = document.createElement('option');
     opt.value = p.key;
     opt.textContent = p.key + ' \u2014 ' + p.name;
     select.appendChild(opt);
@@ -124,10 +135,9 @@ async function init() {
 }
 
 async function loadData() {
-  const project = document.getElementById('projectSelect').value;
-  const btn = document.getElementById('refreshBtn');
+  var project = document.getElementById('projectSelect').value;
+  var btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');
-
   try {
     currentData = await invoke('getIssues', { projectKey: project });
     document.getElementById('loadingState').style.display = 'none';
@@ -145,69 +155,73 @@ async function loadData() {
 
 // ── Render ──
 function render() {
-  const data = currentData;
-  const project = data.project;
-  const issues = data.issues;
-  const stats = data.stats;
-  const refreshedAt = data.refreshedAt;
-  const date = new Date(refreshedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  var data = currentData;
+  var stats = data.stats;
+  var date = new Date(data.refreshedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 
-  document.getElementById('headerTitle').textContent = project + ' \u2014 Stories & Bugs';
+  document.getElementById('headerTitle').textContent = data.project + ' \u2014 Stories & Bugs';
   document.getElementById('headerSub').textContent = 'Excludes: Accepted / Done / Abandoned  |  Refreshed: ' + date;
 
   var pills = document.getElementById('headerPills');
-  var storyCount = stats.byType['Story'] || 0;
-  var bugCount = stats.byType['Bug'] || 0;
   pills.innerHTML = '<span class="hpill">' + stats.total + ' Total Open</span>' +
-    '<span class="hpill story">' + storyCount + ' Stories</span>' +
-    '<span class="hpill bug">' + bugCount + ' Bugs</span>';
+    '<span class="hpill story">' + (stats.byType['Story'] || 0) + ' Stories</span>' +
+    '<span class="hpill bug">' + (stats.byType['Bug'] || 0) + ' Bugs</span>';
 
   renderStats(stats);
   renderDueDates(stats);
-  buildFilters(stats, issues);
-  renderTable(issues);
+  buildFilters(stats, data.issues);
+  renderTable(data.issues);
+}
+
+function cardHtml(num, label, color, bg) {
+  return '<div class="stat-card" style="background:' + bg + ';border-left:4px solid ' + color + '">' +
+    '<div class="stat-num" style="color:' + color + '">' + num + '</div>' +
+    '<div class="stat-label" style="color:' + C.muted + '">' + label + '</div></div>';
 }
 
 function renderStats(stats) {
   var container = document.getElementById('statsContainer');
-  container.innerHTML = '';
-  container.innerHTML += buildStatSection('By Status', Object.entries(stats.byStatus).map(function(e) {
-    return { num: e[1], label: e[0], color: statusColor[e[0]] || 'var(--blue)', dim: statusDim[e[0]] || 'var(--blue-dim)' };
-  }));
+  var html = '';
 
-  var prioOrder = ['Critical','Highest','High','Medium','Low','Lowest'];
-  var prioCards = prioOrder.filter(function(p) { return stats.byPriority[p]; }).map(function(p) {
-    return { num: stats.byPriority[p], label: p, color: priorityColor[p] || 'var(--muted)', dim: priorityDim[p] || 'var(--surface2)' };
+  // By Status
+  html += '<div class="stat-section"><h3>By Status</h3><div class="stat-row">';
+  Object.entries(stats.byStatus).forEach(function(e) {
+    var color = statusColor[e[0]] || C.blue;
+    var bg = statusBg[e[0]] || C.blueBg;
+    html += cardHtml(e[1], e[0], color, bg);
   });
-  Object.keys(stats.byPriority).filter(function(p) { return !prioOrder.includes(p); }).forEach(function(p) {
-    prioCards.push({ num: stats.byPriority[p], label: p, color: 'var(--muted)', dim: 'var(--surface2)' });
+  html += '</div></div>';
+
+  // By Priority
+  html += '<div class="stat-section"><h3>By Priority</h3><div class="stat-row">';
+  ['Critical','Highest','High','Medium','Low','Lowest'].forEach(function(p) {
+    if (!stats.byPriority[p]) return;
+    html += cardHtml(stats.byPriority[p], p, priorityColor[p] || C.muted, priorityBg[p] || C.mutedBg);
   });
-  container.innerHTML += buildStatSection('By Priority', prioCards);
+  Object.keys(stats.byPriority).forEach(function(p) {
+    if (['Critical','Highest','High','Medium','Low','Lowest'].includes(p)) return;
+    html += cardHtml(stats.byPriority[p], p, C.muted, C.mutedBg);
+  });
+  html += '</div></div>';
 
-  container.innerHTML += buildStatSection('By Age', [
-    { num: stats.byAge.fresh, label: '\u22647 days<br><span style="font-size:10px">fresh</span>', color: 'var(--green)', dim: 'var(--green-dim)' },
-    { num: stats.byAge.ageing, label: '8\u201330 days<br><span style="font-size:10px">ageing</span>', color: 'var(--yellow)', dim: 'var(--yellow-dim)' },
-    { num: stats.byAge.stale, label: '31\u201390 days<br><span style="font-size:10px">stale</span>', color: 'var(--orange)', dim: 'var(--orange-dim)' },
-    { num: stats.byAge.critical, label: '>90 days<br><span style="font-size:10px">critical</span>', color: 'var(--red)', dim: 'var(--red-dim)' },
-  ]);
-}
+  // By Age
+  html += '<div class="stat-section"><h3>By Age</h3><div class="stat-row">';
+  html += cardHtml(stats.byAge.fresh, '\u22647 days<br><span style="font-size:10px">fresh</span>', C.green, C.greenBg);
+  html += cardHtml(stats.byAge.ageing, '8\u201330 days<br><span style="font-size:10px">ageing</span>', C.yellow, C.yellowBg);
+  html += cardHtml(stats.byAge.stale, '31\u201390 days<br><span style="font-size:10px">stale</span>', C.orange, C.orangeBg);
+  html += cardHtml(stats.byAge.critical, '>90 days<br><span style="font-size:10px">critical</span>', C.red, C.redBg);
+  html += '</div></div>';
 
-function buildStatSection(title, cards) {
-  return '<div class="stat-section"><h3>' + title + '</h3><div class="stat-row">' +
-    cards.map(function(c) {
-      return '<div class="stat-card" style="background:' + c.dim + ';border-left:3px solid ' + c.color + ';border-color:' + c.color + '">' +
-        '<div class="stat-num" style="color:' + c.color + '">' + c.num + '</div>' +
-        '<div class="stat-label">' + c.label + '</div></div>';
-    }).join('') + '</div></div>';
+  container.innerHTML = html;
 }
 
 function renderDueDates(stats) {
   var sec = document.getElementById('dueSection');
   sec.innerHTML = '<h3>Due Dates</h3><div class="due-cards">' +
-    '<div class="due-card" style="background:var(--red-dim);border-left:3px solid var(--red);border-color:var(--red)"><div class="stat-num" style="color:var(--red)">' + stats.dueDates.overdue + '</div><div class="stat-label">Overdue</div></div>' +
-    '<div class="due-card" style="background:var(--yellow-dim);border-left:3px solid var(--yellow);border-color:var(--yellow)"><div class="stat-num" style="color:var(--yellow)">' + stats.dueDates.dueSoon + '</div><div class="stat-label">Due \u22647 Days</div></div>' +
-    '<div class="due-card" style="background:var(--blue-dim);border-left:3px solid var(--blue);border-color:var(--blue)"><div class="stat-num" style="color:var(--blue)">' + stats.dueDates.hasDueDate + '</div><div class="stat-label">Has Due Date</div></div>' +
-    '<div class="due-card" style="background:var(--surface2);border-left:3px solid var(--muted);border-color:var(--border)"><div class="stat-num" style="color:var(--muted)">' + stats.dueDates.noDueDate + '</div><div class="stat-label">No Due Date</div></div>' +
+    cardHtml(stats.dueDates.overdue, 'Overdue', C.red, C.redBg) +
+    cardHtml(stats.dueDates.dueSoon, 'Due \u22647 Days', C.yellow, C.yellowBg) +
+    cardHtml(stats.dueDates.hasDueDate, 'Has Due Date', C.blue, C.blueBg) +
+    cardHtml(stats.dueDates.noDueDate, 'No Due Date', C.muted, C.mutedBg) +
   '</div>';
 }
 
@@ -227,21 +241,16 @@ function buildFilters(stats, issues) {
   };
 
   Object.entries(filterDefs).forEach(function(entry) {
-    var key = entry[0];
-    var values = entry[1];
+    var key = entry[0]; var values = entry[1];
     if (values.length === 0) return;
     var wrap = document.createElement('div');
     wrap.className = 'ms-wrap';
     wrap.id = 'wrap_' + key;
-    var btnLabel = key.charAt(0).toUpperCase() + key.slice(1);
 
     var btn = document.createElement('button');
     btn.className = 'ms-btn';
-    btn.innerHTML = btnLabel + ' <span class="ms-arrow">&#x25BE;</span>';
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      toggleDropdown(key);
-    });
+    btn.innerHTML = key.charAt(0).toUpperCase() + key.slice(1) + ' <span class="ms-arrow">&#x25BE;</span>';
+    btn.addEventListener('click', function(e) { e.stopPropagation(); toggleDropdown(key); });
 
     var dd = document.createElement('div');
     dd.className = 'ms-dropdown';
@@ -251,20 +260,14 @@ function buildFilters(stats, issues) {
       var label = document.createElement('label');
       label.className = 'ms-item';
       var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.className = 'ms-check';
-      cb.value = v;
-      cb.id = 'cb_' + key + '_' + i;
+      cb.type = 'checkbox'; cb.className = 'ms-check'; cb.value = v; cb.id = 'cb_' + key + '_' + i;
       cb.addEventListener('change', function() { applyFilters(); });
       var span = document.createElement('span');
       span.textContent = v;
-      label.appendChild(cb);
-      label.appendChild(span);
-      dd.appendChild(label);
+      label.appendChild(cb); label.appendChild(span); dd.appendChild(label);
     });
 
-    wrap.appendChild(btn);
-    wrap.appendChild(dd);
+    wrap.appendChild(btn); wrap.appendChild(dd);
     bar.insertBefore(wrap, resetBtn);
   });
 }
@@ -278,17 +281,14 @@ function toggleDropdown(id) {
 }
 
 function getSelected(filterId) {
-  var checks = document.querySelectorAll('#dd_' + filterId + ' .ms-check');
   var vals = [];
-  checks.forEach(function(c) { if (c.checked) vals.push(c.value.toLowerCase()); });
+  document.querySelectorAll('#dd_' + filterId + ' .ms-check').forEach(function(c) { if (c.checked) vals.push(c.value.toLowerCase()); });
   return vals;
 }
 
 function applyFilters() {
   var filters = {};
-  Object.keys(filterDefs).forEach(function(key) {
-    filters[key] = getSelected(key);
-  });
+  Object.keys(filterDefs).forEach(function(key) { filters[key] = getSelected(key); });
   var rows = document.querySelectorAll('#tableBody tr');
   var visible = 0;
   rows.forEach(function(row) {
@@ -314,36 +314,70 @@ function resetFilters() {
   applyFilters();
 }
 
+// ── Export to Excel (CSV with .xls extension for Excel compatibility) ──
+function exportToExcel() {
+  if (!currentData) return;
+  var rows = document.querySelectorAll('#tableBody tr');
+  var csvRows = [];
+  csvRows.push(['Key','Type','Summary','Status','Priority','Assignee','Age (days)','Due Date','Labels','Latest Comment'].join('\t'));
+
+  rows.forEach(function(row) {
+    if (row.style.display === 'none') return;
+    var cells = row.querySelectorAll('td');
+    var key = cells[0] ? cells[0].textContent.trim() : '';
+    var type = cells[1] ? cells[1].textContent.trim() : '';
+    var summary = cells[2] ? cells[2].textContent.trim() : '';
+    var status = cells[3] ? cells[3].textContent.trim() : '';
+    var priority = cells[4] ? cells[4].textContent.trim() : '';
+    var assignee = cells[5] ? cells[5].textContent.trim() : '';
+    var age = cells[6] ? cells[6].textContent.trim() : '';
+    var dueDate = cells[7] ? cells[7].textContent.trim() : '';
+    var labels = cells[8] ? cells[8].textContent.trim() : '';
+    var comment = cells[9] ? cells[9].textContent.trim().replace(/[\t\n\r]+/g, ' ') : '';
+    csvRows.push([key, type, summary, status, priority, assignee, age, dueDate, labels, comment].join('\t'));
+  });
+
+  var tsv = csvRows.join('\n');
+  var blob = new Blob(['\uFEFF' + tsv], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = currentData.project + '_issues_' + new Date().toISOString().slice(0, 10) + '.xls';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Table ──
 function renderTable(issues) {
   var tbody = document.getElementById('tableBody');
   tbody.innerHTML = issues.map(function(issue) {
-    var typeColor = issue.type === 'Bug' ? 'var(--red)' : 'var(--blue)';
-    var typeDim = issue.type === 'Bug' ? 'var(--red-dim)' : 'var(--blue-dim)';
-    var typeIcon = issue.type === 'Bug' ? 'Bug' : 'Story';
-    var sColor = statusColor[issue.status] || 'var(--blue)';
-    var pColor = priorityColor[issue.priority] || 'var(--muted)';
+    var typeColor = issue.type === 'Bug' ? C.red : C.blue;
+    var typeBg = issue.type === 'Bug' ? C.redBg : C.blueBg;
+    var sColor = statusColor[issue.status] || C.blue;
+    var pColor = priorityColor[issue.priority] || C.muted;
     var aColor = ageColor[issue.ageBucket];
-    var aDim = ageDimColor[issue.ageBucket];
+    var aBg = ageBg[issue.ageBucket];
     var summary = issue.summary.length > 80 ? issue.summary.slice(0, 77) + '...' : issue.summary;
     var dueCell = issue.dueDate
-      ? '<span style="color:' + (issue.dueStatus==='overdue'?'var(--red)':issue.dueStatus==='due-soon'?'var(--yellow)':'var(--text)') + ';font-size:12px">' + issue.dueDate + '</span>'
-      : '<span style="color:var(--muted2)">\u2014</span>';
+      ? '<span style="color:' + (issue.dueStatus==='overdue'? C.red : issue.dueStatus==='due-soon'? C.yellow : C.text) + ';font-size:12px">' + issue.dueDate + '</span>'
+      : '<span style="color:' + C.muted2 + '">\u2014</span>';
     var labelsHtml = issue.labels.length > 0
       ? issue.labels.map(function(l) { return '<span class="label-badge">' + escHtml(l) + '</span>'; }).join('')
-      : '<span style="color:var(--muted2)">\u2014</span>';
+      : '<span style="color:' + C.muted2 + '">\u2014</span>';
     var commentHtml = issue.latestComment
       ? '<div class="comment-block"><div class="comment-author">' + escHtml(issue.latestComment.author) + '</div><div class="comment-date">' + issue.latestComment.date + '</div><div class="comment-text">' + escHtml(issue.latestComment.body.slice(0, 120)) + '</div></div>'
-      : '<span style="color:var(--muted2)">\u2014</span>';
+      : '<span style="color:' + C.muted2 + '">\u2014</span>';
 
     return '<tr data-type="' + escHtml(issue.type) + '" data-status="' + escHtml(issue.status) + '" data-priority="' + escHtml(issue.priority) + '" data-assignee="' + escHtml(issue.assignee) + '" data-age="' + issue.ageBucket + '" data-labels="' + escHtml(issue.labels.join(',')) + '">' +
       '<td><a href="' + issue.url + '" target="_blank" class="issue-link">' + issue.key + '</a></td>' +
-      '<td><span class="type-badge" style="color:' + typeColor + ';background:' + typeDim + ';border-color:' + typeColor + '">' + typeIcon + '</span></td>' +
+      '<td><span class="type-badge" style="color:' + typeColor + ';background:' + typeBg + ';border-color:' + typeColor + '">' + (issue.type === 'Bug' ? 'Bug' : 'Story') + '</span></td>' +
       '<td class="summary-cell" title="' + escHtml(issue.summary) + '">' + escHtml(summary) + '</td>' +
-      '<td><span style="color:' + sColor + ';font-size:12px">' + escHtml(issue.status) + '</span></td>' +
-      '<td><span style="color:' + pColor + ';font-weight:600;font-size:12px">' + escHtml(issue.priority) + '</span></td>' +
-      '<td style="font-size:12px;color:var(--text)">' + escHtml(issue.assignee) + '</td>' +
-      '<td data-days="' + issue.daysOpen + '"><span class="age-badge" style="color:' + aColor + ';background:' + aDim + ';border-color:' + aColor + '">' + issue.daysOpen + 'd</span></td>' +
+      '<td><span style="color:' + sColor + ';font-size:12px;font-weight:600">' + escHtml(issue.status) + '</span></td>' +
+      '<td><span style="color:' + pColor + ';font-weight:700;font-size:12px">' + escHtml(issue.priority) + '</span></td>' +
+      '<td style="font-size:12px;color:' + C.text + '">' + escHtml(issue.assignee) + '</td>' +
+      '<td data-days="' + issue.daysOpen + '"><span class="age-badge" style="color:' + aColor + ';background:' + aBg + ';border-color:' + aColor + '">' + issue.daysOpen + 'd</span></td>' +
       '<td data-due="' + (issue.dueDate || 'None') + '">' + dueCell + '</td>' +
       '<td style="font-size:11px">' + labelsHtml + '</td>' +
       '<td style="font-size:11px">' + commentHtml + '</td>' +
@@ -358,14 +392,11 @@ function renderTable(issues) {
 function sortTable(col) {
   if (sortCol === col) sortDir *= -1;
   else { sortCol = col; sortDir = 1; }
-
   document.querySelectorAll('.sort-arrow').forEach(function(a, i) {
     a.textContent = i === col ? (sortDir === 1 ? '\u25B2' : '\u25BC') : '';
   });
-
   var tbody = document.getElementById('tableBody');
   var rows = Array.from(tbody.querySelectorAll('tr'));
-
   rows.sort(function(a, b) {
     var av, bv;
     if (col === 6) {
