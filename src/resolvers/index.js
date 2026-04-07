@@ -37,26 +37,41 @@ resolver.define('getIssues', async ({ payload }) => {
   const jql = `project = ${projectKey} AND status NOT IN (${statusClause}) ORDER BY created DESC`;
   const fields = 'summary,status,priority,assignee,issuetype,created,duedate,labels,comment';
 
-  let allIssues = [];
+  const allIssues = [];
   const maxResults = 100;
-  let nextPageToken = null;
+  const seenKeys = new Set();
 
-  while (true) {
-    let res;
-    if (nextPageToken) {
-      res = await api.asApp().requestJira(
-        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`,
-      );
-    } else {
-      res = await api.asApp().requestJira(
-        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
-      );
+  // First page
+  const firstRes = await api.asApp().requestJira(
+    route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
+  );
+  if (!firstRes.ok) throw new Error(`Failed to fetch issues: ${firstRes.status}`);
+  const firstData = await firstRes.json();
+  const total = firstData.total || 0;
+
+  for (const issue of (firstData.issues || [])) {
+    if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); }
+  }
+
+  // Remaining pages using POST to avoid route encoding issues with nextPageToken
+  let nextPageToken = firstData.nextPageToken || null;
+  while (nextPageToken && allIssues.length < total) {
+    const pageRes = await api.asApp().requestJira('/rest/api/3/search/jql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jql: jql,
+        fields: fields.split(','),
+        maxResults: maxResults,
+        nextPageToken: nextPageToken,
+      }),
+    });
+    if (!pageRes.ok) throw new Error(`Failed to fetch issues page: ${pageRes.status}`);
+    const pageData = await pageRes.json();
+    for (const issue of (pageData.issues || [])) {
+      if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); }
     }
-    if (!res.ok) throw new Error(`Failed to fetch issues: ${res.status}`);
-    const data = await res.json();
-    allIssues.push(...(data.issues || []));
-    if (!data.nextPageToken) break;
-    nextPageToken = data.nextPageToken;
+    nextPageToken = pageData.nextPageToken || null;
   }
 
   const issues = allIssues.map((issue) => transform(issue));
