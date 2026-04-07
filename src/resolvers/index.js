@@ -41,27 +41,26 @@ resolver.define('getIssues', async ({ payload }) => {
   const maxResults = 100;
   const seenKeys = new Set();
   let nextPageToken = null;
-  let total = 0;
-  let maxPages = 20;
+  let pageCount = 0;
 
-  // First page uses route template
+  // First page via route template
   const firstRes = await api.asApp().requestJira(
     route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
   );
   if (!firstRes.ok) throw new Error(`Failed to fetch issues: ${firstRes.status}`);
   const firstData = await firstRes.json();
-  total = firstData.total || 0;
   for (const issue of (firstData.issues || [])) {
     if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); }
   }
   nextPageToken = firstData.nextPageToken || null;
+  pageCount++;
 
-  // Subsequent pages use assumeTrustedRoute to avoid double-encoding nextPageToken
-  while (nextPageToken && allIssues.length < total && maxPages-- > 0) {
+  // Subsequent pages via assumeTrustedRoute (nextPageToken is base64, must not be double-encoded)
+  while (nextPageToken && pageCount < 20) {
     const encodedJql = encodeURIComponent(jql);
     const encodedFields = encodeURIComponent(fields);
-    const url = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`;
-    const pageRes = await api.asApp().requestJira(assumeTrustedRoute(url));
+    const rawUrl = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${encodeURIComponent(nextPageToken)}`;
+    const pageRes = await api.asApp().requestJira(assumeTrustedRoute(rawUrl));
     if (!pageRes.ok) break;
     const pageData = await pageRes.json();
 
@@ -69,9 +68,11 @@ resolver.define('getIssues', async ({ payload }) => {
     for (const issue of (pageData.issues || [])) {
       if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); newCount++; }
     }
-    if (newCount === 0 || !pageData.nextPageToken) break;
-    nextPageToken = pageData.nextPageToken;
+    pageCount++;
+    if (newCount === 0) break;
+    nextPageToken = pageData.nextPageToken || null;
   }
+  console.log(`Fetched ${allIssues.length} issues in ${pageCount} pages`);
 
   const issues = allIssues.map((issue) => transform(issue));
   const stats = computeStats(issues);
