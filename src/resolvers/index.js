@@ -34,7 +34,7 @@ resolver.define('getIssues', async ({ payload }) => {
 
   const excludedStatuses = ['Accepted', 'Done', 'Abandoned'];
   const statusClause = excludedStatuses.map((s) => `"${s}"`).join(', ');
-  const jql = `project = ${projectKey} AND status NOT IN (${statusClause}) ORDER BY created DESC`;
+  const jql = `project = ${projectKey} AND issuetype IN (Story, Bug) AND status NOT IN (${statusClause}) ORDER BY created DESC`;
   const fields = 'summary,status,priority,assignee,issuetype,created,duedate,labels,comment';
 
   const allIssues = [];
@@ -59,8 +59,9 @@ resolver.define('getIssues', async ({ payload }) => {
   while (nextPageToken && pageCount < 20) {
     const encodedJql = encodeURIComponent(jql);
     const encodedFields = encodeURIComponent(fields);
-    // Token is base64 — pass as-is without encoding (assumeTrustedRoute skips encoding)
-    const rawUrl = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`;
+    // Token is base64 — encode only = signs (they break query string parsing) but keep rest raw
+    const safeToken = nextPageToken.replace(/=/g, '%3D');
+    const rawUrl = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${safeToken}`;
     const pageRes = await api.asApp().requestJira(assumeTrustedRoute(rawUrl));
     if (!pageRes.ok) {
       console.log(`Page ${pageCount + 1} failed: HTTP ${pageRes.status}`);
