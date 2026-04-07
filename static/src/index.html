@@ -32,7 +32,7 @@
     <div class="project-selector">
       <label>Project:</label>
       <select id="projectSelect"></select>
-      <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+      <button class="refresh-btn" id="refreshBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
         Refresh
       </button>
@@ -50,7 +50,7 @@
 <!-- FILTERS -->
 <div class="filters" id="filtersBar">
   <span class="filter-label">Filter:</span>
-  <button class="reset-btn" onclick="resetFilters()">Reset</button>
+  <button class="reset-btn" id="resetBtn">Reset</button>
   <span class="result-count" id="resultCount"></span>
 </div>
 
@@ -59,14 +59,14 @@
 <table id="mainTable">
 <thead>
   <tr>
-    <th onclick="sortTable(0)">Key <span class="sort-arrow" id="sa0"></span></th>
-    <th onclick="sortTable(1)">Type <span class="sort-arrow" id="sa1"></span></th>
-    <th onclick="sortTable(2)">Summary <span class="sort-arrow" id="sa2"></span></th>
-    <th onclick="sortTable(3)">Status <span class="sort-arrow" id="sa3"></span></th>
-    <th onclick="sortTable(4)">Priority <span class="sort-arrow" id="sa4"></span></th>
-    <th onclick="sortTable(5)">Assignee <span class="sort-arrow" id="sa5"></span></th>
-    <th onclick="sortTable(6)">Age <span class="sort-arrow" id="sa6"></span></th>
-    <th onclick="sortTable(7)">Due Date <span class="sort-arrow" id="sa7"></span></th>
+    <th data-col="0">Key <span class="sort-arrow" id="sa0"></span></th>
+    <th data-col="1">Type <span class="sort-arrow" id="sa1"></span></th>
+    <th data-col="2">Summary <span class="sort-arrow" id="sa2"></span></th>
+    <th data-col="3">Status <span class="sort-arrow" id="sa3"></span></th>
+    <th data-col="4">Priority <span class="sort-arrow" id="sa4"></span></th>
+    <th data-col="5">Assignee <span class="sort-arrow" id="sa5"></span></th>
+    <th data-col="6">Age <span class="sort-arrow" id="sa6"></span></th>
+    <th data-col="7">Due Date <span class="sort-arrow" id="sa7"></span></th>
     <th>Labels</th>
     <th>Latest Comment</th>
   </tr>
@@ -91,18 +91,32 @@ const priorityOrder = {critical:0,highest:0,high:1,medium:2,low:3,lowest:4};
 const ageOrder = {fresh:0,ageing:1,stale:2,critical:3};
 
 const priorityColor = {Critical:'var(--red)',Highest:'var(--red)',High:'var(--orange)',Medium:'var(--yellow)',Low:'var(--green)',Lowest:'var(--muted)'};
-const statusColor = {'To Do':'var(--muted)',Blocked:'var(--red)','In Progress':'var(--blue)','Code Review':'var(--blue)','Deploy to QA':'var(--blue)','QA Ready to Test':'var(--blue)','QA in Test':'var(--blue)','UAT Test Ready':'var(--blue)','UAT in TEST':'var(--blue)','Ready To Demo':'var(--blue)'};
+const priorityDim = {Critical:'var(--red-dim)',Highest:'var(--red-dim)',High:'var(--orange-dim)',Medium:'var(--yellow-dim)',Low:'var(--green-dim)',Lowest:'var(--surface2)'};
+const statusColor = {'To Do':'var(--muted)',Blocked:'var(--red)','In Progress':'var(--blue)','Code Review':'var(--indigo)','Deploy to QA':'var(--cyan)','QA Ready to Test':'var(--cyan)','QA in Test':'var(--cyan)','UAT Test Ready':'var(--cyan)','UAT in TEST':'var(--cyan)','Ready To Demo':'var(--green)'};
+const statusDim = {'To Do':'var(--surface2)',Blocked:'var(--red-dim)','In Progress':'var(--blue-dim)','Code Review':'var(--indigo-dim)','Deploy to QA':'var(--blue-dim)','QA Ready to Test':'var(--blue-dim)','QA in Test':'var(--blue-dim)','UAT Test Ready':'var(--blue-dim)','UAT in TEST':'var(--blue-dim)','Ready To Demo':'var(--green-dim)'};
 const ageColor = {fresh:'var(--green)',ageing:'var(--yellow)',stale:'var(--orange)',critical:'var(--red)'};
 const ageDimColor = {fresh:'var(--green-dim)',ageing:'var(--yellow-dim)',stale:'var(--orange-dim)',critical:'var(--red-dim)'};
+
+// ── Event Listeners (no inline handlers — Forge CSP blocks them) ──
+document.getElementById('refreshBtn').addEventListener('click', function() { loadData(); });
+document.getElementById('resetBtn').addEventListener('click', function() { resetFilters(); });
+document.querySelectorAll('#mainTable thead th[data-col]').forEach(function(th) {
+  th.addEventListener('click', function() { sortTable(parseInt(th.getAttribute('data-col'))); });
+});
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.ms-wrap')) {
+    document.querySelectorAll('.ms-dropdown').forEach(function(d) { d.classList.remove('open'); });
+  }
+});
 
 // ── Init ──
 async function init() {
   const projects = await invoke('getProjects');
   const select = document.getElementById('projectSelect');
-  projects.forEach(p => {
+  projects.forEach(function(p) {
     const opt = document.createElement('option');
     opt.value = p.key;
-    opt.textContent = `${p.key} — ${p.name}`;
+    opt.textContent = p.key + ' \u2014 ' + p.name;
     select.appendChild(opt);
   });
   select.addEventListener('change', loadData);
@@ -131,20 +145,22 @@ async function loadData() {
 
 // ── Render ──
 function render() {
-  const { project, issues, stats, refreshedAt } = currentData;
+  const data = currentData;
+  const project = data.project;
+  const issues = data.issues;
+  const stats = data.stats;
+  const refreshedAt = data.refreshedAt;
   const date = new Date(refreshedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 
-  document.getElementById('headerTitle').textContent = `${project} — Stories & Bugs`;
-  document.getElementById('headerSub').textContent = `Excludes: Accepted / Done / Abandoned  |  Refreshed: ${date}`;
+  document.getElementById('headerTitle').textContent = project + ' \u2014 Stories & Bugs';
+  document.getElementById('headerSub').textContent = 'Excludes: Accepted / Done / Abandoned  |  Refreshed: ' + date;
 
-  const pills = document.getElementById('headerPills');
-  const storyCount = stats.byType['Story'] || 0;
-  const bugCount = stats.byType['Bug'] || 0;
-  pills.innerHTML = `
-    <span class="hpill">${stats.total} Total Open</span>
-    <span class="hpill story">${storyCount} Stories</span>
-    <span class="hpill bug">${bugCount} Bugs</span>
-  `;
+  var pills = document.getElementById('headerPills');
+  var storyCount = stats.byType['Story'] || 0;
+  var bugCount = stats.byType['Bug'] || 0;
+  pills.innerHTML = '<span class="hpill">' + stats.total + ' Total Open</span>' +
+    '<span class="hpill story">' + storyCount + ' Stories</span>' +
+    '<span class="hpill bug">' + bugCount + ' Bugs</span>';
 
   renderStats(stats);
   renderDueDates(stats);
@@ -153,161 +169,188 @@ function render() {
 }
 
 function renderStats(stats) {
-  const container = document.getElementById('statsContainer');
+  var container = document.getElementById('statsContainer');
   container.innerHTML = '';
-  container.innerHTML += buildStatSection('By Status', Object.entries(stats.byStatus).map(([name, count]) => ({
-    num: count, label: name, color: statusColor[name] || 'var(--blue)'
-  })));
-
-  const prioOrder = ['Critical','Highest','High','Medium','Low','Lowest'];
-  const prioCards = prioOrder.filter(p => stats.byPriority[p]).map(p => ({
-    num: stats.byPriority[p], label: p, color: priorityColor[p] || 'var(--muted)'
+  container.innerHTML += buildStatSection('By Status', Object.entries(stats.byStatus).map(function(e) {
+    return { num: e[1], label: e[0], color: statusColor[e[0]] || 'var(--blue)', dim: statusDim[e[0]] || 'var(--blue-dim)' };
   }));
-  Object.keys(stats.byPriority).filter(p => !prioOrder.includes(p)).forEach(p => {
-    prioCards.push({ num: stats.byPriority[p], label: p, color: 'var(--muted)' });
+
+  var prioOrder = ['Critical','Highest','High','Medium','Low','Lowest'];
+  var prioCards = prioOrder.filter(function(p) { return stats.byPriority[p]; }).map(function(p) {
+    return { num: stats.byPriority[p], label: p, color: priorityColor[p] || 'var(--muted)', dim: priorityDim[p] || 'var(--surface2)' };
+  });
+  Object.keys(stats.byPriority).filter(function(p) { return !prioOrder.includes(p); }).forEach(function(p) {
+    prioCards.push({ num: stats.byPriority[p], label: p, color: 'var(--muted)', dim: 'var(--surface2)' });
   });
   container.innerHTML += buildStatSection('By Priority', prioCards);
 
   container.innerHTML += buildStatSection('By Age', [
-    { num: stats.byAge.fresh, label: '&le;7 days<br><span style="font-size:10px">fresh</span>', color: 'var(--green)' },
-    { num: stats.byAge.ageing, label: '8&ndash;30 days<br><span style="font-size:10px">ageing</span>', color: 'var(--yellow)' },
-    { num: stats.byAge.stale, label: '31&ndash;90 days<br><span style="font-size:10px">stale</span>', color: 'var(--orange)' },
-    { num: stats.byAge.critical, label: '&gt;90 days<br><span style="font-size:10px">critical</span>', color: 'var(--red)' },
+    { num: stats.byAge.fresh, label: '\u22647 days<br><span style="font-size:10px">fresh</span>', color: 'var(--green)', dim: 'var(--green-dim)' },
+    { num: stats.byAge.ageing, label: '8\u201330 days<br><span style="font-size:10px">ageing</span>', color: 'var(--yellow)', dim: 'var(--yellow-dim)' },
+    { num: stats.byAge.stale, label: '31\u201390 days<br><span style="font-size:10px">stale</span>', color: 'var(--orange)', dim: 'var(--orange-dim)' },
+    { num: stats.byAge.critical, label: '>90 days<br><span style="font-size:10px">critical</span>', color: 'var(--red)', dim: 'var(--red-dim)' },
   ]);
 }
 
 function buildStatSection(title, cards) {
-  return `<div class="stat-section"><h3>${title}</h3><div class="stat-row">${
-    cards.map(c => `<div class="stat-card"><div class="stat-num" style="color:${c.color}">${c.num}</div><div class="stat-label">${c.label}</div></div>`).join('')
-  }</div></div>`;
+  return '<div class="stat-section"><h3>' + title + '</h3><div class="stat-row">' +
+    cards.map(function(c) {
+      return '<div class="stat-card" style="background:' + c.dim + ';border-left:3px solid ' + c.color + ';border-color:' + c.color + '">' +
+        '<div class="stat-num" style="color:' + c.color + '">' + c.num + '</div>' +
+        '<div class="stat-label">' + c.label + '</div></div>';
+    }).join('') + '</div></div>';
 }
 
 function renderDueDates(stats) {
-  const sec = document.getElementById('dueSection');
-  sec.innerHTML = `<h3>Due Dates</h3><div class="due-cards">
-    <div class="due-card"><div class="stat-num" style="color:var(--red)">${stats.dueDates.overdue}</div><div class="stat-label">Overdue</div></div>
-    <div class="due-card"><div class="stat-num" style="color:var(--yellow)">${stats.dueDates.dueSoon}</div><div class="stat-label">Due &le;7 Days</div></div>
-    <div class="due-card"><div class="stat-num" style="color:var(--blue)">${stats.dueDates.hasDueDate}</div><div class="stat-label">Has Due Date</div></div>
-    <div class="due-card"><div class="stat-num" style="color:var(--muted)">${stats.dueDates.noDueDate}</div><div class="stat-label">No Due Date</div></div>
-  </div>`;
+  var sec = document.getElementById('dueSection');
+  sec.innerHTML = '<h3>Due Dates</h3><div class="due-cards">' +
+    '<div class="due-card" style="background:var(--red-dim);border-left:3px solid var(--red);border-color:var(--red)"><div class="stat-num" style="color:var(--red)">' + stats.dueDates.overdue + '</div><div class="stat-label">Overdue</div></div>' +
+    '<div class="due-card" style="background:var(--yellow-dim);border-left:3px solid var(--yellow);border-color:var(--yellow)"><div class="stat-num" style="color:var(--yellow)">' + stats.dueDates.dueSoon + '</div><div class="stat-label">Due \u22647 Days</div></div>' +
+    '<div class="due-card" style="background:var(--blue-dim);border-left:3px solid var(--blue);border-color:var(--blue)"><div class="stat-num" style="color:var(--blue)">' + stats.dueDates.hasDueDate + '</div><div class="stat-label">Has Due Date</div></div>' +
+    '<div class="due-card" style="background:var(--surface2);border-left:3px solid var(--muted);border-color:var(--border)"><div class="stat-num" style="color:var(--muted)">' + stats.dueDates.noDueDate + '</div><div class="stat-label">No Due Date</div></div>' +
+  '</div>';
 }
 
 // ── Filters ──
 function buildFilters(stats, issues) {
-  const bar = document.getElementById('filtersBar');
-  bar.querySelectorAll('.ms-wrap').forEach(el => el.remove());
-  const resetBtn = bar.querySelector('.reset-btn');
+  var bar = document.getElementById('filtersBar');
+  bar.querySelectorAll('.ms-wrap').forEach(function(el) { el.remove(); });
+  var resetBtn = document.getElementById('resetBtn');
 
   filterDefs = {
     type: Object.keys(stats.byType).sort(),
     status: Object.keys(stats.byStatus).sort(),
-    priority: ['Critical','Highest','High','Medium','Low','Lowest'].filter(p => stats.byPriority[p]),
+    priority: ['Critical','Highest','High','Medium','Low','Lowest'].filter(function(p) { return stats.byPriority[p]; }),
     assignee: stats.assignees,
     age: ['fresh','ageing','stale','critical'],
     label: stats.labels,
   };
 
-  for (const [key, values] of Object.entries(filterDefs)) {
-    if (values.length === 0) continue;
-    const wrap = document.createElement('div');
+  Object.entries(filterDefs).forEach(function(entry) {
+    var key = entry[0];
+    var values = entry[1];
+    if (values.length === 0) return;
+    var wrap = document.createElement('div');
     wrap.className = 'ms-wrap';
     wrap.id = 'wrap_' + key;
-    const btnLabel = key.charAt(0).toUpperCase() + key.slice(1);
-    wrap.innerHTML = `<button class="ms-btn" onclick="toggleDropdown('${key}')">${btnLabel} <span class="ms-arrow">&#x25BE;</span></button>
-      <div class="ms-dropdown" id="dd_${key}">${values.map((v, i) =>
-        `<label class="ms-item"><input type="checkbox" class="ms-check" value="${escHtml(v)}" id="cb_${key}_${i}" onchange="applyFilters()"><span>${escHtml(v)}</span></label>`
-      ).join('')}</div>`;
+    var btnLabel = key.charAt(0).toUpperCase() + key.slice(1);
+
+    var btn = document.createElement('button');
+    btn.className = 'ms-btn';
+    btn.innerHTML = btnLabel + ' <span class="ms-arrow">&#x25BE;</span>';
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleDropdown(key);
+    });
+
+    var dd = document.createElement('div');
+    dd.className = 'ms-dropdown';
+    dd.id = 'dd_' + key;
+
+    values.forEach(function(v, i) {
+      var label = document.createElement('label');
+      label.className = 'ms-item';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'ms-check';
+      cb.value = v;
+      cb.id = 'cb_' + key + '_' + i;
+      cb.addEventListener('change', function() { applyFilters(); });
+      var span = document.createElement('span');
+      span.textContent = v;
+      label.appendChild(cb);
+      label.appendChild(span);
+      dd.appendChild(label);
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(dd);
     bar.insertBefore(wrap, resetBtn);
-  }
+  });
 }
 
-function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function toggleDropdown(id) {
-  const dd = document.getElementById('dd_' + id);
-  document.querySelectorAll('.ms-dropdown').forEach(d => { if (d !== dd) d.classList.remove('open'); });
+  var dd = document.getElementById('dd_' + id);
+  document.querySelectorAll('.ms-dropdown').forEach(function(d) { if (d !== dd) d.classList.remove('open'); });
   dd.classList.toggle('open');
 }
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.ms-wrap')) {
-    document.querySelectorAll('.ms-dropdown').forEach(d => d.classList.remove('open'));
-  }
-});
 
 function getSelected(filterId) {
-  const checks = document.querySelectorAll('#dd_' + filterId + ' .ms-check');
-  const vals = [];
-  checks.forEach(c => { if (c.checked) vals.push(c.value.toLowerCase()); });
+  var checks = document.querySelectorAll('#dd_' + filterId + ' .ms-check');
+  var vals = [];
+  checks.forEach(function(c) { if (c.checked) vals.push(c.value.toLowerCase()); });
   return vals;
 }
 
 function applyFilters() {
-  const filters = {};
-  for (const key of Object.keys(filterDefs)) {
+  var filters = {};
+  Object.keys(filterDefs).forEach(function(key) {
     filters[key] = getSelected(key);
-  }
-  const rows = document.querySelectorAll('#tableBody tr');
-  let visible = 0;
-  rows.forEach(row => {
-    const d = row.dataset;
-    const labels = (d.labels || '').toLowerCase().split(',').filter(Boolean);
-    const match =
+  });
+  var rows = document.querySelectorAll('#tableBody tr');
+  var visible = 0;
+  rows.forEach(function(row) {
+    var d = row.dataset;
+    var labels = (d.labels || '').toLowerCase().split(',').filter(Boolean);
+    var match =
       (filters.type.length === 0 || filters.type.includes((d.type||'').toLowerCase())) &&
       (filters.status.length === 0 || filters.status.includes((d.status||'').toLowerCase())) &&
       (filters.priority.length === 0 || filters.priority.includes((d.priority||'').toLowerCase())) &&
       (filters.assignee.length === 0 || filters.assignee.includes((d.assignee||'').toLowerCase())) &&
       (filters.age.length === 0 || filters.age.includes((d.age||'').toLowerCase())) &&
-      (filters.label.length === 0 || filters.label.some(l => labels.includes(l)));
+      (filters.label.length === 0 || filters.label.some(function(l) { return labels.includes(l); }));
     row.style.display = match ? '' : 'none';
     if (match) visible++;
   });
-  document.getElementById('resultCount').textContent = `Showing ${visible} issues`;
+  document.getElementById('resultCount').textContent = 'Showing ' + visible + ' issues';
   document.getElementById('noData').style.display = visible === 0 ? 'block' : 'none';
   document.getElementById('mainTable').style.display = visible === 0 ? 'none' : '';
 }
 
 function resetFilters() {
-  document.querySelectorAll('.ms-check').forEach(c => c.checked = false);
+  document.querySelectorAll('.ms-check').forEach(function(c) { c.checked = false; });
   applyFilters();
 }
 
 // ── Table ──
 function renderTable(issues) {
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = issues.map(issue => {
-    const typeColor = issue.type === 'Bug' ? 'var(--red)' : 'var(--blue)';
-    const typeDim = issue.type === 'Bug' ? 'var(--red-dim)' : 'var(--blue-dim)';
-    const typeIcon = issue.type === 'Bug' ? 'Bug' : 'Story';
-    const sColor = statusColor[issue.status] || 'var(--blue)';
-    const pColor = priorityColor[issue.priority] || 'var(--muted)';
-    const aColor = ageColor[issue.ageBucket];
-    const aDim = ageDimColor[issue.ageBucket];
-    const summary = issue.summary.length > 80 ? issue.summary.slice(0, 77) + '...' : issue.summary;
-    const dueCell = issue.dueDate
-      ? `<span style="color:${issue.dueStatus==='overdue'?'var(--red)':issue.dueStatus==='due-soon'?'var(--yellow)':'var(--text)'};font-size:12px">${issue.dueDate}</span>`
-      : '<span style="color:var(--muted2)">&mdash;</span>';
-    const labelsHtml = issue.labels.length > 0
-      ? issue.labels.map(l => `<span class="label-badge">${escHtml(l)}</span>`).join('')
-      : '<span style="color:var(--muted2)">&mdash;</span>';
-    const commentHtml = issue.latestComment
-      ? `<div class="comment-block"><div class="comment-author">${escHtml(issue.latestComment.author)}</div><div class="comment-date">${issue.latestComment.date}</div><div class="comment-text">${escHtml(issue.latestComment.body.slice(0, 120))}</div></div>`
-      : '<span style="color:var(--muted2)">&mdash;</span>';
+  var tbody = document.getElementById('tableBody');
+  tbody.innerHTML = issues.map(function(issue) {
+    var typeColor = issue.type === 'Bug' ? 'var(--red)' : 'var(--blue)';
+    var typeDim = issue.type === 'Bug' ? 'var(--red-dim)' : 'var(--blue-dim)';
+    var typeIcon = issue.type === 'Bug' ? 'Bug' : 'Story';
+    var sColor = statusColor[issue.status] || 'var(--blue)';
+    var pColor = priorityColor[issue.priority] || 'var(--muted)';
+    var aColor = ageColor[issue.ageBucket];
+    var aDim = ageDimColor[issue.ageBucket];
+    var summary = issue.summary.length > 80 ? issue.summary.slice(0, 77) + '...' : issue.summary;
+    var dueCell = issue.dueDate
+      ? '<span style="color:' + (issue.dueStatus==='overdue'?'var(--red)':issue.dueStatus==='due-soon'?'var(--yellow)':'var(--text)') + ';font-size:12px">' + issue.dueDate + '</span>'
+      : '<span style="color:var(--muted2)">\u2014</span>';
+    var labelsHtml = issue.labels.length > 0
+      ? issue.labels.map(function(l) { return '<span class="label-badge">' + escHtml(l) + '</span>'; }).join('')
+      : '<span style="color:var(--muted2)">\u2014</span>';
+    var commentHtml = issue.latestComment
+      ? '<div class="comment-block"><div class="comment-author">' + escHtml(issue.latestComment.author) + '</div><div class="comment-date">' + issue.latestComment.date + '</div><div class="comment-text">' + escHtml(issue.latestComment.body.slice(0, 120)) + '</div></div>'
+      : '<span style="color:var(--muted2)">\u2014</span>';
 
-    return `<tr data-type="${escHtml(issue.type)}" data-status="${escHtml(issue.status)}" data-priority="${escHtml(issue.priority)}" data-assignee="${escHtml(issue.assignee)}" data-age="${issue.ageBucket}" data-labels="${escHtml(issue.labels.join(','))}">
-      <td><a href="${issue.url}" target="_blank" class="issue-link">${issue.key}</a></td>
-      <td><span class="type-badge" style="color:${typeColor};background:${typeDim};border-color:${typeColor}">${typeIcon}</span></td>
-      <td class="summary-cell" title="${escHtml(issue.summary)}">${escHtml(summary)}</td>
-      <td><span style="color:${sColor};font-size:12px">${escHtml(issue.status)}</span></td>
-      <td><span style="color:${pColor};font-weight:600;font-size:12px">${escHtml(issue.priority)}</span></td>
-      <td style="font-size:12px;color:var(--text)">${escHtml(issue.assignee)}</td>
-      <td data-days="${issue.daysOpen}"><span class="age-badge" style="color:${aColor};background:${aDim};border-color:${aColor}">${issue.daysOpen}d</span></td>
-      <td data-due="${issue.dueDate || 'None'}">${dueCell}</td>
-      <td style="font-size:11px">${labelsHtml}</td>
-      <td style="font-size:11px">${commentHtml}</td>
-    </tr>`;
+    return '<tr data-type="' + escHtml(issue.type) + '" data-status="' + escHtml(issue.status) + '" data-priority="' + escHtml(issue.priority) + '" data-assignee="' + escHtml(issue.assignee) + '" data-age="' + issue.ageBucket + '" data-labels="' + escHtml(issue.labels.join(',')) + '">' +
+      '<td><a href="' + issue.url + '" target="_blank" class="issue-link">' + issue.key + '</a></td>' +
+      '<td><span class="type-badge" style="color:' + typeColor + ';background:' + typeDim + ';border-color:' + typeColor + '">' + typeIcon + '</span></td>' +
+      '<td class="summary-cell" title="' + escHtml(issue.summary) + '">' + escHtml(summary) + '</td>' +
+      '<td><span style="color:' + sColor + ';font-size:12px">' + escHtml(issue.status) + '</span></td>' +
+      '<td><span style="color:' + pColor + ';font-weight:600;font-size:12px">' + escHtml(issue.priority) + '</span></td>' +
+      '<td style="font-size:12px;color:var(--text)">' + escHtml(issue.assignee) + '</td>' +
+      '<td data-days="' + issue.daysOpen + '"><span class="age-badge" style="color:' + aColor + ';background:' + aDim + ';border-color:' + aColor + '">' + issue.daysOpen + 'd</span></td>' +
+      '<td data-due="' + (issue.dueDate || 'None') + '">' + dueCell + '</td>' +
+      '<td style="font-size:11px">' + labelsHtml + '</td>' +
+      '<td style="font-size:11px">' + commentHtml + '</td>' +
+    '</tr>';
   }).join('');
 
-  document.getElementById('resultCount').textContent = `Showing ${issues.length} issues`;
+  document.getElementById('resultCount').textContent = 'Showing ' + issues.length + ' issues';
   document.getElementById('noData').style.display = issues.length === 0 ? 'block' : 'none';
 }
 
@@ -316,15 +359,15 @@ function sortTable(col) {
   if (sortCol === col) sortDir *= -1;
   else { sortCol = col; sortDir = 1; }
 
-  document.querySelectorAll('.sort-arrow').forEach((a, i) => {
+  document.querySelectorAll('.sort-arrow').forEach(function(a, i) {
     a.textContent = i === col ? (sortDir === 1 ? '\u25B2' : '\u25BC') : '';
   });
 
-  const tbody = document.getElementById('tableBody');
-  const rows = Array.from(tbody.querySelectorAll('tr'));
+  var tbody = document.getElementById('tableBody');
+  var rows = Array.from(tbody.querySelectorAll('tr'));
 
-  rows.sort((a, b) => {
-    let av, bv;
+  rows.sort(function(a, b) {
+    var av, bv;
     if (col === 6) {
       av = parseInt(a.querySelector('td:nth-child(7)').getAttribute('data-days') || '0');
       bv = parseInt(b.querySelector('td:nth-child(7)').getAttribute('data-days') || '0');
@@ -339,21 +382,21 @@ function sortTable(col) {
     } else if (col === 4) {
       av = (a.querySelector('td:nth-child(5)').textContent || '').trim().toLowerCase();
       bv = (b.querySelector('td:nth-child(5)').textContent || '').trim().toLowerCase();
-      return sortDir * ((priorityOrder[av] ?? 99) - (priorityOrder[bv] ?? 99));
+      return sortDir * ((priorityOrder[av] !== undefined ? priorityOrder[av] : 99) - (priorityOrder[bv] !== undefined ? priorityOrder[bv] : 99));
     } else {
       av = (a.querySelector('td:nth-child(' + (col+1) + ')').textContent || '').trim().toLowerCase();
       bv = (b.querySelector('td:nth-child(' + (col+1) + ')').textContent || '').trim().toLowerCase();
       return sortDir * av.localeCompare(bv);
     }
   });
-  rows.forEach(r => tbody.appendChild(r));
+  rows.forEach(function(r) { tbody.appendChild(r); });
 }
 
 // ── Auto-refresh every 5 min ──
 setInterval(loadData, 5 * 60 * 1000);
 
 // ── Boot ──
-init().catch(err => {
+init().catch(function(err) {
   document.getElementById('loadingState').style.display = 'none';
   document.getElementById('errorBanner').textContent = 'Failed to initialize: ' + (err.message || err);
   document.getElementById('errorBanner').style.display = 'block';
