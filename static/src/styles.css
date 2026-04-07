@@ -15,23 +15,38 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 @keyframes spin{to{transform:rotate(360deg)}}
 .error-banner{background:#fff5f5;border:1px solid #e53e3e;color:#c53030;padding:16px 28px;margin:20px 28px;border-radius:8px;display:none}
 
-/* ── COLOR CLASSES — white cards, colored left accent + colored numbers ── */
-.c-red{background:#fff;border-left:4px solid #e53e3e;border-color:#e2e8f0;border-left-color:#e53e3e}
+/* ── COLOR CLASSES — white bg, full colored outline, colored number + label ── */
+.c-red{background:#fff;border:2px solid #e53e3e;border-radius:10px}
 .c-red .stat-num{color:#e53e3e}
-.c-orange{background:#fff;border-left:4px solid #dd6b20;border-color:#e2e8f0;border-left-color:#dd6b20}
+.c-red .stat-label{color:#c53030}
+
+.c-orange{background:#fff;border:2px solid #dd6b20;border-radius:10px}
 .c-orange .stat-num{color:#dd6b20}
-.c-yellow{background:#fff;border-left:4px solid #d69e2e;border-color:#e2e8f0;border-left-color:#d69e2e}
+.c-orange .stat-label{color:#c05621}
+
+.c-yellow{background:#fff;border:2px solid #d69e2e;border-radius:10px}
 .c-yellow .stat-num{color:#d69e2e}
-.c-green{background:#fff;border-left:4px solid #38a169;border-color:#e2e8f0;border-left-color:#38a169}
+.c-yellow .stat-label{color:#b7791f}
+
+.c-green{background:#fff;border:2px solid #38a169;border-radius:10px}
 .c-green .stat-num{color:#38a169}
-.c-blue{background:#fff;border-left:4px solid #0065ff;border-color:#e2e8f0;border-left-color:#0065ff}
+.c-green .stat-label{color:#276749}
+
+.c-blue{background:#fff;border:2px solid #0065ff;border-radius:10px}
 .c-blue .stat-num{color:#0065ff}
-.c-indigo{background:#fff;border-left:4px solid #6554c0;border-color:#e2e8f0;border-left-color:#6554c0}
+.c-blue .stat-label{color:#0050cc}
+
+.c-indigo{background:#fff;border:2px solid #6554c0;border-radius:10px}
 .c-indigo .stat-num{color:#6554c0}
-.c-cyan{background:#fff;border-left:4px solid #00a3bf;border-color:#e2e8f0;border-left-color:#00a3bf}
+.c-indigo .stat-label{color:#553c9a}
+
+.c-cyan{background:#fff;border:2px solid #00a3bf;border-radius:10px}
 .c-cyan .stat-num{color:#00a3bf}
-.c-muted{background:#fff;border-left:4px solid #94a3b8;border-color:#e2e8f0;border-left-color:#94a3b8}
-.c-muted .stat-num{color:#64748b}
+.c-cyan .stat-label{color:#086f83}
+
+.c-muted{background:#fff;border:2px solid #a0aec0;border-radius:10px}
+.c-muted .stat-num{color:#718096}
+.c-muted .stat-label{color:#718096}
 
 /* Table badges — subtle tint that works on white rows */
 .badge-red{color:#c53030;background:#fff5f5;border-color:#feb2b2}
@@ -80,19 +95,19 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .stat-section{margin-bottom:24px}
 .stat-section h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px}
 .stat-row{display:flex;flex-direction:row;flex-wrap:wrap;gap:10px}
-.stat-card{border:1px solid var(--border);border-radius:8px;padding:16px 20px;min-width:100px;max-width:200px;flex:0 0 auto;text-align:center;transition:box-shadow 0.15s}
-.stat-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+.stat-card{border-radius:10px;padding:16px 20px;min-width:100px;max-width:200px;flex:0 0 auto;text-align:center;transition:transform 0.15s,box-shadow 0.15s}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.1)}
 .stat-num{font-size:28px;font-weight:800;line-height:1}
-.stat-label{font-size:11px;margin-top:6px;font-weight:500;color:var(--muted)}
+.stat-label{font-size:11px;margin-top:8px;font-weight:600;letter-spacing:0.3px}
 
 /* DUE DATE CARDS */
 .due-section{padding:0 28px 4px}
 .due-section h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px}
 .due-cards{display:flex;flex-direction:row;gap:10px;flex-wrap:wrap;margin-bottom:24px}
-.due-card{border:1px solid var(--border);border-radius:8px;padding:16px 20px;min-width:130px;text-align:center;transition:box-shadow 0.15s}
-.due-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+.due-card{border-radius:10px;padding:16px 20px;min-width:130px;text-align:center;transition:transform 0.15s,box-shadow 0.15s}
+.due-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.1)}
 .due-card .stat-num{font-size:28px;font-weight:800}
-.due-card .stat-label{font-size:11px;margin-top:6px;font-weight:500;color:var(--muted)}
+.due-card .stat-label{font-size:11px;margin-top:8px;font-weight:600;letter-spacing:0.3px}
 
 /* FILTERS + EXPORT */
 .filters{padding:4px 28px 20px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
