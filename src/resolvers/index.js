@@ -38,18 +38,25 @@ resolver.define('getIssues', async ({ payload }) => {
   const fields = 'summary,status,priority,assignee,issuetype,created,duedate,labels,comment';
 
   let allIssues = [];
-  let startAt = 0;
   const maxResults = 100;
+  let nextPageToken = null;
 
   while (true) {
-    const res = await api.asApp().requestJira(
-      route`/rest/api/3/search?jql=${jql}&fields=${fields}&startAt=${startAt}&maxResults=${maxResults}`,
-    );
+    let res;
+    if (nextPageToken) {
+      res = await api.asApp().requestJira(
+        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`,
+      );
+    } else {
+      res = await api.asApp().requestJira(
+        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
+      );
+    }
     if (!res.ok) throw new Error(`Failed to fetch issues: ${res.status}`);
     const data = await res.json();
     allIssues.push(...(data.issues || []));
-    if (startAt + maxResults >= (data.total || 0)) break;
-    startAt += maxResults;
+    if (!data.nextPageToken) break;
+    nextPageToken = data.nextPageToken;
   }
 
   const issues = allIssues.map((issue) => transform(issue));
