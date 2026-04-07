@@ -222,6 +222,24 @@ function buildFilters(stats, issues) {
     var dd = document.createElement('div');
     dd.className = 'ms-dropdown'; dd.id = 'dd_' + key;
 
+    // Add search box for dropdowns with 6+ items (assignee, label, status)
+    if (values.length >= 6) {
+      var searchBox = document.createElement('input');
+      searchBox.type = 'text';
+      searchBox.className = 'ms-search';
+      searchBox.placeholder = 'Search ' + key + '...';
+      searchBox.addEventListener('input', function() {
+        var query = searchBox.value.toLowerCase();
+        var items = dd.querySelectorAll('.ms-item');
+        items.forEach(function(item) {
+          var text = item.textContent.toLowerCase();
+          item.style.display = text.indexOf(query) !== -1 ? '' : 'none';
+        });
+      });
+      searchBox.addEventListener('click', function(e) { e.stopPropagation(); });
+      dd.appendChild(searchBox);
+    }
+
     values.forEach(function(v, i) {
       var lbl = document.createElement('label');
       lbl.className = 'ms-item';
