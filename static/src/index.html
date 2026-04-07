@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jira Stories &amp; Bugs Dashboard</title>
+<script src="app.js"></script>
+<style>
+:root {
+  --bg:#ffffff; --surface:#f8f9fa; --surface2:#f1f3f5; --surface3:#e9ecef;
+  --border:#dee2e6; --border2:#ced4da;
+  --text:#1a1a2e; --muted:#5c636a; --muted2:#8b949e;
+  --green:#16a34a; --yellow:#ca8a04; --orange:#ea580c; --red:#dc2626;
+  --blue:#2563eb; --indigo:#6366f1; --cyan:#0891b2;
+  --green-dim:#dcfce7; --yellow-dim:#fef9c3; --orange-dim:#ffedd5; --red-dim:#fee2e2;
+  --blue-dim:#dbeafe; --indigo-dim:#e0e7ff;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted2)}
+
+.loading{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--muted);font-size:16px}
+.loading .spinner{width:24px;height:24px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-right:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-banner{background:var(--red-dim);border:1px solid var(--red);color:var(--red);padding:16px 28px;margin:20px 28px;border-radius:8px;display:none}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 50%,#f1f3f5 100%);border-bottom:1px solid var(--border);padding:20px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+.header-left h1{font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px}
+.sub{color:var(--muted);font-size:11px;margin-bottom:10px}
+.header-pills{display:flex;gap:8px;flex-wrap:wrap}
+.hpill{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;background:var(--surface3);border:1px solid var(--border2);color:var(--muted)}
+.hpill.story{color:var(--blue);border-color:var(--blue);background:var(--blue-dim)}
+.hpill.bug{color:var(--red);border-color:var(--red);background:var(--red-dim)}
+.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+
+/* PROJECT SELECTOR */
+.project-selector{display:flex;align-items:center;gap:8px}
+.project-selector label{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+.project-selector select{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer}
+.project-selector select:hover{border-color:var(--blue)}
+.refresh-btn{background:var(--surface3);border:1px solid var(--border2);color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px}
+.refresh-btn:hover{color:var(--text);border-color:var(--blue)}
+.refresh-btn.spinning svg{animation:spin 1s linear infinite}
+.auto-refresh{color:var(--muted2);font-size:10px;text-align:right}
+
+/* STATS */
+.stats-container{padding:20px 28px 0}
+.stat-section{margin-bottom:20px}
+.stat-section h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:10px}
+.stat-row{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;min-width:90px;max-width:160px;flex:0 0 auto;text-align:center}
+.stat-num{font-size:22px;font-weight:700;line-height:1}
+.stat-label{color:var(--muted);font-size:11px;margin-top:4px}
+
+/* DUE DATE CARDS */
+.due-section{padding:0 28px 4px}
+.due-section h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:10px}
+.due-cards{display:flex;flex-direction:row;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.due-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;min-width:130px;text-align:center}
+.due-card .stat-num{font-size:22px;font-weight:700}
+.due-card .stat-label{color:var(--muted);font-size:11px;margin-top:4px}
+
+/* FILTERS */
+.filters{padding:0 28px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filter-label{color:var(--muted);font-size:11px;margin-right:4px}
+.ms-wrap{position:relative;display:inline-block}
+.ms-btn{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ms-btn:hover{border-color:var(--blue);background:var(--surface3)}
+.ms-arrow{color:var(--muted);font-size:10px}
+.ms-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--bg);border:1px solid var(--border2);border-radius:8px;min-width:180px;max-height:240px;overflow-y:auto;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,0.12)}
+.ms-dropdown.open{display:block}
+.ms-item{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;color:var(--text)}
+.ms-item:hover{background:var(--surface3)}
+.ms-item input{accent-color:var(--blue);cursor:pointer}
+.reset-btn{background:var(--surface3);border:1px solid var(--border2);color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px}
+.reset-btn:hover{color:var(--text);border-color:var(--muted)}
+.result-count{color:var(--muted);font-size:11px;margin-left:auto}
+
+/* TABLE */
+.table-wrap{padding:0 28px 28px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;background:var(--surface)}
+thead th{background:var(--surface3);color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;padding:10px 10px;text-align:left;position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{background:var(--surface2);color:var(--text)}
+thead th .sort-arrow{margin-left:4px;color:var(--muted2)}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody tr:hover{background:var(--surface2)}
+td{padding:8px 10px;vertical-align:top}
+.issue-link{color:var(--blue);text-decoration:none;font-weight:600;font-size:12px;white-space:nowrap}
+.issue-link:hover{text-decoration:underline}
+.type-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap}
+.age-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap}
+.label-badge{display:inline-block;background:var(--surface3);border:1px solid var(--border2);color:var(--muted);padding:1px 6px;border-radius:3px;font-size:10px;margin:1px 1px}
+.summary-cell{max-width:280px;color:var(--text)}
+.comment-block{max-width:220px}
+.comment-author{color:var(--blue);font-size:11px;font-weight:600}
+.comment-date{color:var(--muted2);font-size:10px}
+.comment-text{color:var(--muted);font-size:11px;margin-top:2px;line-height:1.4;word-break:break-word}
+.no-data{text-align:center;padding:40px;color:var(--muted);display:none}
+</style>
+</head>
+<body>
+
+<!-- LOADING STATE -->
+<div class="loading" id="loadingState">
+  <div class="spinner"></div>
+  <span>Loading dashboard...</span>
+</div>
+
+<!-- ERROR BANNER -->
+<div class="error-banner" id="errorBanner"></div>
+
+<!-- MAIN CONTENT (hidden until data loads) -->
+<div id="mainContent" style="display:none">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1 id="headerTitle">Jira Stories &amp; Bugs Dashboard</h1>
+    <div class="sub" id="headerSub">Loading...</div>
+    <div class="header-pills" id="headerPills"></div>
+  </div>
+  <div class="header-right">
+    <div class="project-selector">
+      <label>Project:</label>
+      <select id="projectSelect"></select>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div class="auto-refresh">Auto-refreshes every 5 minutes</div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-container" id="statsContainer"></div>
+
+<!-- DUE DATES -->
+<div class="due-section" id="dueSection"></div>
+
+<!-- FILTERS -->
+<div class="filters" id="filtersBar">
+  <span class="filter-label">Filter:</span>
+  <button class="reset-btn" onclick="resetFilters()">Reset</button>
+  <span class="result-count" id="resultCount"></span>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+<table id="mainTable">
+<thead>
+  <tr>
+    <th onclick="sortTable(0)">Key <span class="sort-arrow" id="sa0"></span></th>
+    <th onclick="sortTable(1)">Type <span class="sort-arrow" id="sa1"></span></th>
+    <th onclick="sortTable(2)">Summary <span class="sort-arrow" id="sa2"></span></th>
+    <th onclick="sortTable(3)">Status <span class="sort-arrow" id="sa3"></span></th>
+    <th onclick="sortTable(4)">Priority <span class="sort-arrow" id="sa4"></span></th>
+    <th onclick="sortTable(5)">Assignee <span class="sort-arrow" id="sa5"></span></th>
+    <th onclick="sortTable(6)">Age <span class="sort-arrow" id="sa6"></span></th>
+    <th onclick="sortTable(7)">Due Date <span class="sort-arrow" id="sa7"></span></th>
+    <th>Labels</th>
+    <th>Latest Comment</th>
+  </tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+<div class="no-data" id="noData">No issues match the current filters.</div>
+</div>
+
+</div><!-- /mainContent -->
+
+<script>
+// ── Forge Bridge (loaded via app.js) ──
+// invoke is set globally by app.js
+
+// ── State ──
+let currentData = null;
+let filterDefs = {};
+let sortCol = -1;
+let sortDir = 1;
+const priorityOrder = {critical:0,highest:0,high:1,medium:2,low:3,lowest:4};
+const ageOrder = {fresh:0,ageing:1,stale:2,critical:3};
+
+const priorityColor = {Critical:'var(--red)',Highest:'var(--red)',High:'var(--orange)',Medium:'var(--yellow)',Low:'var(--green)',Lowest:'var(--muted)'};
+const statusColor = {'To Do':'var(--muted)',Blocked:'var(--red)','In Progress':'var(--blue)','Code Review':'var(--blue)','Deploy to QA':'var(--blue)','QA Ready to Test':'var(--blue)','QA in Test':'var(--blue)','UAT Test Ready':'var(--blue)','UAT in TEST':'var(--blue)','Ready To Demo':'var(--blue)'};
+const ageColor = {fresh:'var(--green)',ageing:'var(--yellow)',stale:'var(--orange)',critical:'var(--red)'};
+const ageDimColor = {fresh:'var(--green-dim)',ageing:'var(--yellow-dim)',stale:'var(--orange-dim)',critical:'var(--red-dim)'};
+
+// ── Init ──
+async function init() {
+  const projects = await invoke('getProjects');
+  const select = document.getElementById('projectSelect');
+  projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.key;
+    opt.textContent = `${p.key} — ${p.name}`;
+    select.appendChild(opt);
+  });
+  select.addEventListener('change', loadData);
+  await loadData();
+}
+
+async function loadData() {
+  const project = document.getElementById('projectSelect').value;
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+
+  try {
+    currentData = await invoke('getIssues', { projectKey: project });
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('mainContent').style.display = '';
+    document.getElementById('errorBanner').style.display = 'none';
+    render();
+  } catch (err) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorBanner').textContent = 'Error: ' + (err.message || err);
+    document.getElementById('errorBanner').style.display = 'block';
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+// ── Render ──
+function render() {
+  const { project, issues, stats, refreshedAt } = currentData;
+  const date = new Date(refreshedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  document.getElementById('headerTitle').textContent = `${project} — Stories & Bugs`;
+  document.getElementById('headerSub').textContent = `Excludes: Accepted / Done / Abandoned  |  Refreshed: ${date}`;
+
+  const pills = document.getElementById('headerPills');
+  const storyCount = stats.byType['Story'] || 0;
+  const bugCount = stats.byType['Bug'] || 0;
+  pills.innerHTML = `
+    <span class="hpill">${stats.total} Total Open</span>
+    <span class="hpill story">${storyCount} Stories</span>
+    <span class="hpill bug">${bugCount} Bugs</span>
+  `;
+
+  renderStats(stats);
+  renderDueDates(stats);
+  buildFilters(stats, issues);
+  renderTable(issues);
+}
+
+function renderStats(stats) {
+  const container = document.getElementById('statsContainer');
+  container.innerHTML = '';
+  container.innerHTML += buildStatSection('By Status', Object.entries(stats.byStatus).map(([name, count]) => ({
+    num: count, label: name, color: statusColor[name] || 'var(--blue)'
+  })));
+
+  const prioOrder = ['Critical','Highest','High','Medium','Low','Lowest'];
+  const prioCards = prioOrder.filter(p => stats.byPriority[p]).map(p => ({
+    num: stats.byPriority[p], label: p, color: priorityColor[p] || 'var(--muted)'
+  }));
+  Object.keys(stats.byPriority).filter(p => !prioOrder.includes(p)).forEach(p => {
+    prioCards.push({ num: stats.byPriority[p], label: p, color: 'var(--muted)' });
+  });
+  container.innerHTML += buildStatSection('By Priority', prioCards);
+
+  container.innerHTML += buildStatSection('By Age', [
+    { num: stats.byAge.fresh, label: '&le;7 days<br><span style="font-size:10px">fresh</span>', color: 'var(--green)' },
+    { num: stats.byAge.ageing, label: '8&ndash;30 days<br><span style="font-size:10px">ageing</span>', color: 'var(--yellow)' },
+    { num: stats.byAge.stale, label: '31&ndash;90 days<br><span style="font-size:10px">stale</span>', color: 'var(--orange)' },
+    { num: stats.byAge.critical, label: '&gt;90 days<br><span style="font-size:10px">critical</span>', color: 'var(--red)' },
+  ]);
+}
+
+function buildStatSection(title, cards) {
+  return `<div class="stat-section"><h3>${title}</h3><div class="stat-row">${
+    cards.map(c => `<div class="stat-card"><div class="stat-num" style="color:${c.color}">${c.num}</div><div class="stat-label">${c.label}</div></div>`).join('')
+  }</div></div>`;
+}
+
+function renderDueDates(stats) {
+  const sec = document.getElementById('dueSection');
+  sec.innerHTML = `<h3>Due Dates</h3><div class="due-cards">
+    <div class="due-card"><div class="stat-num" style="color:var(--red)">${stats.dueDates.overdue}</div><div class="stat-label">Overdue</div></div>
+    <div class="due-card"><div class="stat-num" style="color:var(--yellow)">${stats.dueDates.dueSoon}</div><div class="stat-label">Due &le;7 Days</div></div>
+    <div class="due-card"><div class="stat-num" style="color:var(--blue)">${stats.dueDates.hasDueDate}</div><div class="stat-label">Has Due Date</div></div>
+    <div class="due-card"><div class="stat-num" style="color:var(--muted)">${stats.dueDates.noDueDate}</div><div class="stat-label">No Due Date</div></div>
+  </div>`;
+}
+
+// ── Filters ──
+function buildFilters(stats, issues) {
+  const bar = document.getElementById('filtersBar');
+  bar.querySelectorAll('.ms-wrap').forEach(el => el.remove());
+  const resetBtn = bar.querySelector('.reset-btn');
+
+  filterDefs = {
+    type: Object.keys(stats.byType).sort(),
+    status: Object.keys(stats.byStatus).sort(),
+    priority: ['Critical','Highest','High','Medium','Low','Lowest'].filter(p => stats.byPriority[p]),
+    assignee: stats.assignees,
+    age: ['fresh','ageing','stale','critical'],
+    label: stats.labels,
+  };
+
+  for (const [key, values] of Object.entries(filterDefs)) {
+    if (values.length === 0) continue;
+    const wrap = document.createElement('div');
+    wrap.className = 'ms-wrap';
+    wrap.id = 'wrap_' + key;
+    const btnLabel = key.charAt(0).toUpperCase() + key.slice(1);
+    wrap.innerHTML = `<button class="ms-btn" onclick="toggleDropdown('${key}')">${btnLabel} <span class="ms-arrow">&#x25BE;</span></button>
+      <div class="ms-dropdown" id="dd_${key}">${values.map((v, i) =>
+        `<label class="ms-item"><input type="checkbox" class="ms-check" value="${escHtml(v)}" id="cb_${key}_${i}" onchange="applyFilters()"><span>${escHtml(v)}</span></label>`
+      ).join('')}</div>`;
+    bar.insertBefore(wrap, resetBtn);
+  }
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function toggleDropdown(id) {
+  const dd = document.getElementById('dd_' + id);
+  document.querySelectorAll('.ms-dropdown').forEach(d => { if (d !== dd) d.classList.remove('open'); });
+  dd.classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.ms-wrap')) {
+    document.querySelectorAll('.ms-dropdown').forEach(d => d.classList.remove('open'));
+  }
+});
+
+function getSelected(filterId) {
+  const checks = document.querySelectorAll('#dd_' + filterId + ' .ms-check');
+  const vals = [];
+  checks.forEach(c => { if (c.checked) vals.push(c.value.toLowerCase()); });
+  return vals;
+}
+
+function applyFilters() {
+  const filters = {};
+  for (const key of Object.keys(filterDefs)) {
+    filters[key] = getSelected(key);
+  }
+  const rows = document.querySelectorAll('#tableBody tr');
+  let visible = 0;
+  rows.forEach(row => {
+    const d = row.dataset;
+    const labels = (d.labels || '').toLowerCase().split(',').filter(Boolean);
+    const match =
+      (filters.type.length === 0 || filters.type.includes((d.type||'').toLowerCase())) &&
+      (filters.status.length === 0 || filters.status.includes((d.status||'').toLowerCase())) &&
+      (filters.priority.length === 0 || filters.priority.includes((d.priority||'').toLowerCase())) &&
+      (filters.assignee.length === 0 || filters.assignee.includes((d.assignee||'').toLowerCase())) &&
+      (filters.age.length === 0 || filters.age.includes((d.age||'').toLowerCase())) &&
+      (filters.label.length === 0 || filters.label.some(l => labels.includes(l)));
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  document.getElementById('resultCount').textContent = `Showing ${visible} issues`;
+  document.getElementById('noData').style.display = visible === 0 ? 'block' : 'none';
+  document.getElementById('mainTable').style.display = visible === 0 ? 'none' : '';
+}
+
+function resetFilters() {
+  document.querySelectorAll('.ms-check').forEach(c => c.checked = false);
+  applyFilters();
+}
+
+// ── Table ──
+function renderTable(issues) {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = issues.map(issue => {
+    const typeColor = issue.type === 'Bug' ? 'var(--red)' : 'var(--blue)';
+    const typeDim = issue.type === 'Bug' ? 'var(--red-dim)' : 'var(--blue-dim)';
+    const typeIcon = issue.type === 'Bug' ? 'Bug' : 'Story';
+    const sColor = statusColor[issue.status] || 'var(--blue)';
+    const pColor = priorityColor[issue.priority] || 'var(--muted)';
+    const aColor = ageColor[issue.ageBucket];
+    const aDim = ageDimColor[issue.ageBucket];
+    const summary = issue.summary.length > 80 ? issue.summary.slice(0, 77) + '...' : issue.summary;
+    const dueCell = issue.dueDate
+      ? `<span style="color:${issue.dueStatus==='overdue'?'var(--red)':issue.dueStatus==='due-soon'?'var(--yellow)':'var(--text)'};font-size:12px">${issue.dueDate}</span>`
+      : '<span style="color:var(--muted2)">&mdash;</span>';
+    const labelsHtml = issue.labels.length > 0
+      ? issue.labels.map(l => `<span class="label-badge">${escHtml(l)}</span>`).join('')
+      : '<span style="color:var(--muted2)">&mdash;</span>';
+    const commentHtml = issue.latestComment
+      ? `<div class="comment-block"><div class="comment-author">${escHtml(issue.latestComment.author)}</div><div class="comment-date">${issue.latestComment.date}</div><div class="comment-text">${escHtml(issue.latestComment.body.slice(0, 120))}</div></div>`
+      : '<span style="color:var(--muted2)">&mdash;</span>';
+
+    return `<tr data-type="${escHtml(issue.type)}" data-status="${escHtml(issue.status)}" data-priority="${escHtml(issue.priority)}" data-assignee="${escHtml(issue.assignee)}" data-age="${issue.ageBucket}" data-labels="${escHtml(issue.labels.join(','))}">
+      <td><a href="${issue.url}" target="_blank" class="issue-link">${issue.key}</a></td>
+      <td><span class="type-badge" style="color:${typeColor};background:${typeDim};border-color:${typeColor}">${typeIcon}</span></td>
+      <td class="summary-cell" title="${escHtml(issue.summary)}">${escHtml(summary)}</td>
+      <td><span style="color:${sColor};font-size:12px">${escHtml(issue.status)}</span></td>
+      <td><span style="color:${pColor};font-weight:600;font-size:12px">${escHtml(issue.priority)}</span></td>
+      <td style="font-size:12px;color:var(--text)">${escHtml(issue.assignee)}</td>
+      <td data-days="${issue.daysOpen}"><span class="age-badge" style="color:${aColor};background:${aDim};border-color:${aColor}">${issue.daysOpen}d</span></td>
+      <td data-due="${issue.dueDate || 'None'}">${dueCell}</td>
+      <td style="font-size:11px">${labelsHtml}</td>
+      <td style="font-size:11px">${commentHtml}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('resultCount').textContent = `Showing ${issues.length} issues`;
+  document.getElementById('noData').style.display = issues.length === 0 ? 'block' : 'none';
+}
+
+// ── Sort ──
+function sortTable(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+
+  document.querySelectorAll('.sort-arrow').forEach((a, i) => {
+    a.textContent = i === col ? (sortDir === 1 ? '\u25B2' : '\u25BC') : '';
+  });
+
+  const tbody = document.getElementById('tableBody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+
+  rows.sort((a, b) => {
+    let av, bv;
+    if (col === 6) {
+      av = parseInt(a.querySelector('td:nth-child(7)').getAttribute('data-days') || '0');
+      bv = parseInt(b.querySelector('td:nth-child(7)').getAttribute('data-days') || '0');
+      return sortDir * (av - bv);
+    } else if (col === 7) {
+      av = a.querySelector('td:nth-child(8)').getAttribute('data-due') || '';
+      bv = b.querySelector('td:nth-child(8)').getAttribute('data-due') || '';
+      if (av === 'None' && bv === 'None') return 0;
+      if (av === 'None') return 1;
+      if (bv === 'None') return -1;
+      return sortDir * av.localeCompare(bv);
+    } else if (col === 4) {
+      av = (a.querySelector('td:nth-child(5)').textContent || '').trim().toLowerCase();
+      bv = (b.querySelector('td:nth-child(5)').textContent || '').trim().toLowerCase();
+      return sortDir * ((priorityOrder[av] ?? 99) - (priorityOrder[bv] ?? 99));
+    } else {
+      av = (a.querySelector('td:nth-child(' + (col+1) + ')').textContent || '').trim().toLowerCase();
+      bv = (b.querySelector('td:nth-child(' + (col+1) + ')').textContent || '').trim().toLowerCase();
+      return sortDir * av.localeCompare(bv);
+    }
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+// ── Auto-refresh every 5 min ──
+setInterval(loadData, 5 * 60 * 1000);
+
+// ── Boot ──
+init().catch(err => {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('errorBanner').textContent = 'Failed to initialize: ' + (err.message || err);
+  document.getElementById('errorBanner').style.display = 'block';
+});
+</script>
+</body>
+</html>

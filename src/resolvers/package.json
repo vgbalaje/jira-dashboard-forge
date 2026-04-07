@@ -1,0 +1,8 @@
+{
+  "name": "jira-dashboard-resolver",
+  "version": "1.0.0",
+  "dependencies": {
+    "@forge/api": "^7.1.2",
+    "@forge/resolver": "^1.7.1"
+  }
+}

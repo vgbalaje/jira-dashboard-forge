@@ -1,0 +1,17 @@
+{
+  "name": "jira-dashboard-forge",
+  "version": "1.0.0",
+  "description": "Forge app — Jira Stories & Bugs Dashboard",
+  "scripts": {
+    "start": "forge tunnel",
+    "build": "cd static && npm install && npm run build",
+    "deploy": "npm run build && forge deploy"
+  },
+  "dependencies": {
+    "@forge/api": "^7.1.2",
+    "@forge/resolver": "^1.7.1"
+  },
+  "devDependencies": {
+    "@forge/cli": "12.15.0"
+  }
+}
