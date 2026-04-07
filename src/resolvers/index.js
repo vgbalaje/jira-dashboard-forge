@@ -55,13 +55,17 @@ resolver.define('getIssues', async ({ payload }) => {
   nextPageToken = firstData.nextPageToken || null;
   pageCount++;
 
-  // Subsequent pages via assumeTrustedRoute (nextPageToken is base64, must not be double-encoded)
+  // Subsequent pages via assumeTrustedRoute — pass token RAW (no encodeURIComponent)
   while (nextPageToken && pageCount < 20) {
     const encodedJql = encodeURIComponent(jql);
     const encodedFields = encodeURIComponent(fields);
-    const rawUrl = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${encodeURIComponent(nextPageToken)}`;
+    // Token is base64 — pass as-is without encoding (assumeTrustedRoute skips encoding)
+    const rawUrl = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`;
     const pageRes = await api.asApp().requestJira(assumeTrustedRoute(rawUrl));
-    if (!pageRes.ok) break;
+    if (!pageRes.ok) {
+      console.log(`Page ${pageCount + 1} failed: HTTP ${pageRes.status}`);
+      break;
+    }
     const pageData = await pageRes.json();
 
     let newCount = 0;
@@ -69,10 +73,11 @@ resolver.define('getIssues', async ({ payload }) => {
       if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); newCount++; }
     }
     pageCount++;
+    console.log(`Page ${pageCount}: ${newCount} new issues, ${allIssues.length} total`);
     if (newCount === 0) break;
     nextPageToken = pageData.nextPageToken || null;
   }
-  console.log(`Fetched ${allIssues.length} issues in ${pageCount} pages`);
+  console.log(`Fetched ${allIssues.length} unique issues in ${pageCount} pages`);
 
   const issues = allIssues.map((issue) => transform(issue));
   const stats = computeStats(issues);
