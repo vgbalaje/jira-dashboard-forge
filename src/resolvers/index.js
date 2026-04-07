@@ -40,38 +40,37 @@ resolver.define('getIssues', async ({ payload }) => {
   const allIssues = [];
   const maxResults = 100;
   const seenKeys = new Set();
+  let nextPageToken = null;
+  let total = 0;
+  let maxPages = 20; // safety limit
 
-  // First page
-  const firstRes = await api.asApp().requestJira(
-    route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
-  );
-  if (!firstRes.ok) throw new Error(`Failed to fetch issues: ${firstRes.status}`);
-  const firstData = await firstRes.json();
-  const total = firstData.total || 0;
-
-  for (const issue of (firstData.issues || [])) {
-    if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); }
-  }
-
-  // Remaining pages using POST to avoid route encoding issues with nextPageToken
-  let nextPageToken = firstData.nextPageToken || null;
-  while (nextPageToken && allIssues.length < total) {
-    const pageRes = await api.asApp().requestJira('/rest/api/3/search/jql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jql: jql,
-        fields: fields.split(','),
-        maxResults: maxResults,
-        nextPageToken: nextPageToken,
-      }),
-    });
-    if (!pageRes.ok) throw new Error(`Failed to fetch issues page: ${pageRes.status}`);
-    const pageData = await pageRes.json();
-    for (const issue of (pageData.issues || [])) {
-      if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); }
+  while (maxPages-- > 0) {
+    let res;
+    if (nextPageToken) {
+      res = await api.asApp().requestJira(
+        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`,
+      );
+    } else {
+      res = await api.asApp().requestJira(
+        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
+      );
     }
-    nextPageToken = pageData.nextPageToken || null;
+    if (!res.ok) throw new Error(`Failed to fetch issues: ${res.status}`);
+    const data = await res.json();
+    if (!total) total = data.total || 0;
+
+    let newCount = 0;
+    for (const issue of (data.issues || [])) {
+      if (!seenKeys.has(issue.key)) {
+        seenKeys.add(issue.key);
+        allIssues.push(issue);
+        newCount++;
+      }
+    }
+
+    // Stop if: no token, got all issues, or page returned all duplicates
+    if (!data.nextPageToken || allIssues.length >= total || newCount === 0) break;
+    nextPageToken = data.nextPageToken;
   }
 
   const issues = allIssues.map((issue) => transform(issue));
