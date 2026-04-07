@@ -69,6 +69,11 @@
 <tbody id="tableBody"></tbody>
 </table>
 <div class="no-data" id="noData">No issues match the current filters.</div>
+<div class="pagination" id="pagination">
+  <button class="page-btn" id="prevPage">Previous</button>
+  <span class="page-info" id="pageInfo"></span>
+  <button class="page-btn" id="nextPage">Next</button>
+</div>
 </div>
 
 </div>
@@ -84,11 +89,16 @@ var currentData = null;
 var filterDefs = {};
 var sortCol = -1;
 var sortDir = 1;
+var currentPage = 0;
+var pageSize = 100;
+var filteredIssues = [];
 
 // ── Event Listeners ──
 document.getElementById('refreshBtn').addEventListener('click', function() { loadData(); });
 document.getElementById('resetBtn').addEventListener('click', function() { resetFilters(); });
 document.getElementById('exportBtn').addEventListener('click', function() { exportToExcel(); });
+document.getElementById('prevPage').addEventListener('click', function() { if (currentPage > 0) { currentPage--; renderCurrentPage(); } });
+document.getElementById('nextPage').addEventListener('click', function() { if ((currentPage + 1) * pageSize < filteredIssues.length) { currentPage++; renderCurrentPage(); } });
 document.querySelectorAll('#mainTable thead th[data-col]').forEach(function(th) {
   th.addEventListener('click', function() { sortTable(parseInt(th.getAttribute('data-col'))); });
 });
@@ -271,26 +281,25 @@ function getSelected(filterId) {
 }
 
 function applyFilters() {
+  if (!currentData) return;
   var filters = {};
   Object.keys(filterDefs).forEach(function(key) { filters[key] = getSelected(key); });
-  var rows = document.querySelectorAll('#tableBody tr');
-  var visible = 0;
-  rows.forEach(function(row) {
-    var d = row.dataset;
-    var labels = (d.labels || '').toLowerCase().split(',').filter(Boolean);
-    var match =
-      (filters.type.length === 0 || filters.type.includes((d.type||'').toLowerCase())) &&
-      (filters.status.length === 0 || filters.status.includes((d.status||'').toLowerCase())) &&
-      (filters.priority.length === 0 || filters.priority.includes((d.priority||'').toLowerCase())) &&
-      (filters.assignee.length === 0 || filters.assignee.includes((d.assignee||'').toLowerCase())) &&
-      (filters.age.length === 0 || filters.age.includes((d.age||'').toLowerCase())) &&
+
+  var allIssues = currentData.issues;
+  var matched = allIssues.filter(function(issue) {
+    var labels = issue.labels.map(function(l) { return l.toLowerCase(); });
+    return (filters.type.length === 0 || filters.type.includes(issue.type.toLowerCase())) &&
+      (filters.status.length === 0 || filters.status.includes(issue.status.toLowerCase())) &&
+      (filters.priority.length === 0 || filters.priority.includes(issue.priority.toLowerCase())) &&
+      (filters.assignee.length === 0 || filters.assignee.includes(issue.assignee.toLowerCase())) &&
+      (filters.age.length === 0 || filters.age.includes(issue.ageBucket.toLowerCase())) &&
       (filters.label.length === 0 || filters.label.some(function(l) { return labels.includes(l); }));
-    row.style.display = match ? '' : 'none';
-    if (match) visible++;
   });
-  document.getElementById('resultCount').textContent = 'Showing ' + visible + ' issues';
-  document.getElementById('noData').style.display = visible === 0 ? 'block' : 'none';
-  document.getElementById('mainTable').style.display = visible === 0 ? 'none' : '';
+
+  filteredIssues = matched;
+  currentPage = 0;
+  renderCurrentPage();
+  document.getElementById('mainTable').style.display = matched.length === 0 ? 'none' : '';
 }
 
 function resetFilters() {
@@ -362,8 +371,19 @@ function exportToExcel() {
 
 // ── Table ──
 function renderTable(issues) {
+  filteredIssues = issues;
+  currentPage = 0;
+  renderCurrentPage();
+}
+
+function renderCurrentPage() {
+  var start = currentPage * pageSize;
+  var end = Math.min(start + pageSize, filteredIssues.length);
+  var pageIssues = filteredIssues.slice(start, end);
+  var totalPages = Math.ceil(filteredIssues.length / pageSize);
+
   var tbody = document.getElementById('tableBody');
-  tbody.innerHTML = issues.map(function(issue) {
+  tbody.innerHTML = pageIssues.map(function(issue) {
     var typeCls = issue.type === 'Bug' ? 'badge-red' : 'badge-blue';
     var sCls = 'text-' + (statusClass[issue.status] || 'blue');
     var pCls = 'text-' + (priorityClass[issue.priority] || 'muted');
@@ -391,8 +411,14 @@ function renderTable(issues) {
     '</tr>';
   }).join('');
 
-  document.getElementById('resultCount').textContent = 'Showing ' + issues.length + ' issues';
-  document.getElementById('noData').style.display = issues.length === 0 ? 'block' : 'none';
+  document.getElementById('resultCount').textContent = 'Showing ' + (start + 1) + '\u2013' + end + ' of ' + filteredIssues.length + ' issues';
+  document.getElementById('noData').style.display = filteredIssues.length === 0 ? 'block' : 'none';
+
+  // Update pagination controls
+  document.getElementById('prevPage').disabled = currentPage === 0;
+  document.getElementById('nextPage').disabled = currentPage >= totalPages - 1;
+  document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + ' of ' + totalPages;
+  document.getElementById('pagination').style.display = totalPages <= 1 ? 'none' : '';
 }
 
 // ── Sort ──

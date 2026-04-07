@@ -161,3 +161,10 @@ td{padding:8px 12px;vertical-align:top;font-size:12px}
 .comment-text{color:var(--muted);font-size:11px;margin-top:2px;line-height:1.4;word-break:break-word}
 .dash{color:var(--muted2)}
 .no-data{text-align:center;padding:40px;color:var(--muted);display:none}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 28px}
+.page-btn{background:var(--brand);border:none;color:#fff;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;transition:background 0.15s}
+.page-btn:hover{background:var(--brand-hover)}
+.page-btn:disabled{background:var(--border);color:var(--muted2);cursor:not-allowed}
+.page-info{color:var(--muted);font-size:12px;font-weight:600}
