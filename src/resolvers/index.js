@@ -43,7 +43,7 @@ resolver.define('getIssues', async ({ payload }) => {
 
   while (true) {
     const res = await api.asApp().requestJira(
-      route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&startAt=${startAt}&maxResults=${maxResults}`,
+      route`/rest/api/3/search?jql=${jql}&fields=${fields}&startAt=${startAt}&maxResults=${maxResults}`,
     );
     if (!res.ok) throw new Error(`Failed to fetch issues: ${res.status}`);
     const data = await res.json();
