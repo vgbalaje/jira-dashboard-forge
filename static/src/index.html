@@ -309,18 +309,22 @@ function resetFilters() {
 
 // ── Export to Excel ──
 function exportToExcel() {
-  if (!currentData) return;
+  if (!currentData || !filteredIssues.length) return;
   var headers = ['Key','Type','Summary','Status','Priority','Assignee','Age (days)','Due Date','Labels','Latest Comment'];
-  var rows = document.querySelectorAll('#tableBody tr');
-  var dataRows = [];
-  rows.forEach(function(row) {
-    if (row.style.display === 'none') return;
-    var cells = row.querySelectorAll('td');
-    var vals = [];
-    for (var i = 0; i < cells.length; i++) {
-      vals.push(cells[i].textContent.trim().replace(/[\t\n\r]+/g, ' '));
-    }
-    dataRows.push(vals);
+  var dataRows = filteredIssues.map(function(issue) {
+    var comment = issue.latestComment ? (issue.latestComment.author + ' ' + issue.latestComment.date + ': ' + issue.latestComment.body) : '';
+    return [
+      issue.key,
+      issue.type,
+      issue.summary,
+      issue.status,
+      issue.priority,
+      issue.assignee,
+      String(issue.daysOpen),
+      issue.dueDate || '',
+      issue.labels.join(', '),
+      comment.replace(/[\t\n\r]+/g, ' ').slice(0, 200)
+    ];
   });
 
   function escXml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
