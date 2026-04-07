@@ -1,6 +1,6 @@
 const Resolver = require('@forge/resolver').default;
 const api = require('@forge/api');
-const { route } = api;
+const { route, assumeTrustedRoute } = api;
 
 const resolver = new Resolver();
 
@@ -42,35 +42,35 @@ resolver.define('getIssues', async ({ payload }) => {
   const seenKeys = new Set();
   let nextPageToken = null;
   let total = 0;
-  let maxPages = 20; // safety limit
+  let maxPages = 20;
 
-  while (maxPages-- > 0) {
-    let res;
-    if (nextPageToken) {
-      res = await api.asApp().requestJira(
-        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`,
-      );
-    } else {
-      res = await api.asApp().requestJira(
-        route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
-      );
-    }
-    if (!res.ok) throw new Error(`Failed to fetch issues: ${res.status}`);
-    const data = await res.json();
-    if (!total) total = data.total || 0;
+  // First page uses route template
+  const firstRes = await api.asApp().requestJira(
+    route`/rest/api/3/search/jql?jql=${jql}&fields=${fields}&maxResults=${maxResults}`,
+  );
+  if (!firstRes.ok) throw new Error(`Failed to fetch issues: ${firstRes.status}`);
+  const firstData = await firstRes.json();
+  total = firstData.total || 0;
+  for (const issue of (firstData.issues || [])) {
+    if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); }
+  }
+  nextPageToken = firstData.nextPageToken || null;
+
+  // Subsequent pages use assumeTrustedRoute to avoid double-encoding nextPageToken
+  while (nextPageToken && allIssues.length < total && maxPages-- > 0) {
+    const encodedJql = encodeURIComponent(jql);
+    const encodedFields = encodeURIComponent(fields);
+    const url = `/rest/api/3/search/jql?jql=${encodedJql}&fields=${encodedFields}&maxResults=${maxResults}&nextPageToken=${nextPageToken}`;
+    const pageRes = await api.asApp().requestJira(assumeTrustedRoute(url));
+    if (!pageRes.ok) break;
+    const pageData = await pageRes.json();
 
     let newCount = 0;
-    for (const issue of (data.issues || [])) {
-      if (!seenKeys.has(issue.key)) {
-        seenKeys.add(issue.key);
-        allIssues.push(issue);
-        newCount++;
-      }
+    for (const issue of (pageData.issues || [])) {
+      if (!seenKeys.has(issue.key)) { seenKeys.add(issue.key); allIssues.push(issue); newCount++; }
     }
-
-    // Stop if: no token, got all issues, or page returned all duplicates
-    if (!data.nextPageToken || allIssues.length >= total || newCount === 0) break;
-    nextPageToken = data.nextPageToken;
+    if (newCount === 0 || !pageData.nextPageToken) break;
+    nextPageToken = pageData.nextPageToken;
   }
 
   const issues = allIssues.map((issue) => transform(issue));
