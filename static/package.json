@@ -2,7 +2,7 @@
   "name": "jira-dashboard-ui",
   "version": "1.0.0",
   "scripts": {
-    "build": "esbuild src/app.js --bundle --outfile=build/app.js --format=iife --target=es2020 && cp src/index.html build/index.html"
+    "build": "esbuild src/app.js --bundle --outfile=build/app.js --format=iife --target=es2020 && cp src/index.html build/index.html && cp src/styles.css build/styles.css"
   },
   "dependencies": {
     "@forge/bridge": "^5.15.0"
