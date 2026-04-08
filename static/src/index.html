@@ -41,16 +41,13 @@
 <div class="due-section" id="dueSection"></div>
 
 <div class="filters" id="filtersBar">
-  <div class="active-chips" id="activeChips"></div>
-  <div id="filterSections"></div>
-  <div class="filter-actions">
-    <button class="reset-btn" id="resetBtn">Reset All</button>
-    <button class="export-btn" id="exportBtn">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Export Excel
-    </button>
-    <span class="result-count" id="resultCount"></span>
-  </div>
+  <span class="filter-label">Filter:</span>
+  <button class="reset-btn" id="resetBtn">Reset</button>
+  <button class="export-btn" id="exportBtn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export Excel
+  </button>
+  <span class="result-count" id="resultCount"></span>
 </div>
 
 <div class="table-wrap">
@@ -207,11 +204,10 @@ function renderDueDates(stats) {
 }
 
 // ── Filters ──
-// Active filter selections
-var activeFilters = { type: [], status: [], priority: [], assignee: [], age: [], label: [] };
-
 function buildFilters(stats, issues) {
-  activeFilters = { type: [], status: [], priority: [], assignee: [], age: [], label: [] };
+  var bar = document.getElementById('filtersBar');
+  bar.querySelectorAll('.ms-wrap').forEach(function(el) { el.remove(); });
+  var resetBtn = document.getElementById('resetBtn');
 
   filterDefs = {
     type: Object.keys(stats.byType).sort(),
@@ -222,181 +218,82 @@ function buildFilters(stats, issues) {
     label: stats.labels,
   };
 
-  var container = document.getElementById('filterSections');
-  container.innerHTML = '';
-
-  // Pill-based filters for small sets
-  var pillFilters = ['type', 'status', 'priority', 'age'];
-  // Dropdown-based for large sets
-  var dropdownFilters = ['assignee', 'label'];
-
-  pillFilters.forEach(function(key) {
-    var values = filterDefs[key];
-    if (!values || values.length === 0) return;
-    var section = document.createElement('div');
-    section.className = 'filter-section';
-    var title = document.createElement('div');
-    title.className = 'filter-section-title';
-    title.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-    section.appendChild(title);
-
-    var row = document.createElement('div');
-    row.className = 'pill-row';
-    values.forEach(function(v) {
-      var pill = document.createElement('span');
-      pill.className = 'pill';
-      pill.textContent = v;
-      pill.setAttribute('data-filter', key);
-      pill.setAttribute('data-value', v);
-      pill.addEventListener('click', function() {
-        pill.classList.toggle('active');
-        toggleFilter(key, v);
-      });
-      row.appendChild(pill);
-    });
-    section.appendChild(row);
-    container.appendChild(section);
-  });
-
-  // Dropdown pills for assignee and label (too many values for pills)
-  dropdownFilters.forEach(function(key) {
-    var values = filterDefs[key];
-    if (!values || values.length === 0) return;
-    var section = document.createElement('div');
-    section.className = 'filter-section';
-    var title = document.createElement('div');
-    title.className = 'filter-section-title';
-    title.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-    section.appendChild(title);
-
+  Object.entries(filterDefs).forEach(function(entry) {
+    var key = entry[0]; var values = entry[1];
+    if (values.length === 0) return;
     var wrap = document.createElement('div');
-    wrap.className = 'pill-dropdown';
+    wrap.className = 'ms-wrap'; wrap.id = 'wrap_' + key;
 
-    var btn = document.createElement('span');
-    btn.className = 'pill-dd-btn';
-    btn.id = 'ddbtn_' + key;
-    btn.textContent = 'Select ' + key + '...';
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      var menu = document.getElementById('ddmenu_' + key);
-      document.querySelectorAll('.pill-dd-menu').forEach(function(m) { if (m !== menu) m.classList.remove('open'); });
-      menu.classList.toggle('open');
-    });
+    var btn = document.createElement('button');
+    btn.className = 'ms-btn';
+    btn.innerHTML = key.charAt(0).toUpperCase() + key.slice(1) + ' <span class="ms-arrow">&#x25BE;</span>';
+    btn.addEventListener('click', function(e) { e.stopPropagation(); toggleDropdown(key); });
 
-    var menu = document.createElement('div');
-    menu.className = 'pill-dd-menu';
-    menu.id = 'ddmenu_' + key;
+    var dd = document.createElement('div');
+    dd.className = 'ms-dropdown'; dd.id = 'dd_' + key;
 
-    var search = document.createElement('input');
-    search.type = 'text';
-    search.className = 'pill-dd-search';
-    search.placeholder = 'Search ' + key + '...';
-    search.addEventListener('click', function(e) { e.stopPropagation(); });
-    search.addEventListener('input', function() {
-      var q = search.value.toLowerCase();
-      menu.querySelectorAll('.pill-dd-item').forEach(function(item) {
-        item.style.display = item.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+    // Add search box for dropdowns with 6+ items (assignee, label, status)
+    if (values.length >= 6) {
+      var searchBox = document.createElement('input');
+      searchBox.type = 'text';
+      searchBox.className = 'ms-search';
+      searchBox.placeholder = 'Search ' + key + '...';
+      searchBox.addEventListener('input', function() {
+        var query = searchBox.value.toLowerCase();
+        var items = dd.querySelectorAll('.ms-item');
+        items.forEach(function(item) {
+          var text = item.textContent.toLowerCase();
+          item.style.display = text.indexOf(query) !== -1 ? '' : 'none';
+        });
       });
-    });
-    menu.appendChild(search);
+      searchBox.addEventListener('click', function(e) { e.stopPropagation(); });
+      dd.appendChild(searchBox);
+    }
 
-    values.forEach(function(v) {
-      var item = document.createElement('label');
-      item.className = 'pill-dd-item';
+    values.forEach(function(v, i) {
+      var lbl = document.createElement('label');
+      lbl.className = 'ms-item';
       var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = v;
-      cb.addEventListener('change', function() {
-        toggleFilter(key, v);
-        updateDropdownBtn(key);
-      });
+      cb.type = 'checkbox'; cb.className = 'ms-check'; cb.value = v; cb.id = 'cb_' + key + '_' + i;
+      cb.addEventListener('change', function() { applyFilters(); });
       var span = document.createElement('span');
       span.textContent = v;
-      item.appendChild(cb);
-      item.appendChild(span);
-      menu.appendChild(item);
+      lbl.appendChild(cb); lbl.appendChild(span); dd.appendChild(lbl);
     });
 
-    wrap.appendChild(btn);
-    wrap.appendChild(menu);
-    section.appendChild(wrap);
-    container.appendChild(section);
-  });
-}
-
-function toggleFilter(key, value) {
-  var idx = activeFilters[key].indexOf(value.toLowerCase());
-  if (idx === -1) {
-    activeFilters[key].push(value.toLowerCase());
-  } else {
-    activeFilters[key].splice(idx, 1);
-  }
-  renderActiveChips();
-  applyFilters();
-}
-
-function updateDropdownBtn(key) {
-  var btn = document.getElementById('ddbtn_' + key);
-  var count = activeFilters[key].length;
-  if (count > 0) {
-    btn.textContent = key.charAt(0).toUpperCase() + key.slice(1) + ' (' + count + ')';
-    btn.classList.add('has-selection');
-  } else {
-    btn.textContent = 'Select ' + key + '...';
-    btn.classList.remove('has-selection');
-  }
-}
-
-function renderActiveChips() {
-  var container = document.getElementById('activeChips');
-  var html = '';
-  Object.keys(activeFilters).forEach(function(key) {
-    activeFilters[key].forEach(function(v) {
-      html += '<span class="chip">' + escHtml(v) + ' <span class="chip-x" data-key="' + key + '" data-val="' + escHtml(v) + '">&times;</span></span>';
-    });
-  });
-  container.innerHTML = html;
-  container.querySelectorAll('.chip-x').forEach(function(x) {
-    x.addEventListener('click', function() {
-      var key = x.getAttribute('data-key');
-      var val = x.getAttribute('data-val');
-      // Deactivate pill
-      var pill = document.querySelector('.pill[data-filter="' + key + '"][data-value="' + val + '"]');
-      if (pill) pill.classList.remove('active');
-      // Deactivate checkbox
-      var menu = document.getElementById('ddmenu_' + key);
-      if (menu) {
-        menu.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
-          if (cb.value.toLowerCase() === val) cb.checked = false;
-        });
-      }
-      toggleFilter(key, val);
-      updateDropdownBtn(key);
-    });
+    wrap.appendChild(btn); wrap.appendChild(dd);
+    bar.insertBefore(wrap, resetBtn);
   });
 }
 
 function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-// Close dropdowns when clicking outside
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.pill-dropdown')) {
-    document.querySelectorAll('.pill-dd-menu').forEach(function(m) { m.classList.remove('open'); });
-  }
-});
+function toggleDropdown(id) {
+  var dd = document.getElementById('dd_' + id);
+  document.querySelectorAll('.ms-dropdown').forEach(function(d) { if (d !== dd) d.classList.remove('open'); });
+  dd.classList.toggle('open');
+}
+
+function getSelected(filterId) {
+  var vals = [];
+  document.querySelectorAll('#dd_' + filterId + ' .ms-check').forEach(function(c) { if (c.checked) vals.push(c.value.toLowerCase()); });
+  return vals;
+}
 
 function applyFilters() {
   if (!currentData) return;
-  var f = activeFilters;
+  var filters = {};
+  Object.keys(filterDefs).forEach(function(key) { filters[key] = getSelected(key); });
 
-  var matched = currentData.issues.filter(function(issue) {
+  var allIssues = currentData.issues;
+  var matched = allIssues.filter(function(issue) {
     var labels = issue.labels.map(function(l) { return l.toLowerCase(); });
-    return (f.type.length === 0 || f.type.includes(issue.type.toLowerCase())) &&
-      (f.status.length === 0 || f.status.includes(issue.status.toLowerCase())) &&
-      (f.priority.length === 0 || f.priority.includes(issue.priority.toLowerCase())) &&
-      (f.assignee.length === 0 || f.assignee.includes(issue.assignee.toLowerCase())) &&
-      (f.age.length === 0 || f.age.includes(issue.ageBucket.toLowerCase())) &&
-      (f.label.length === 0 || f.label.some(function(l) { return labels.includes(l); }));
+    return (filters.type.length === 0 || filters.type.includes(issue.type.toLowerCase())) &&
+      (filters.status.length === 0 || filters.status.includes(issue.status.toLowerCase())) &&
+      (filters.priority.length === 0 || filters.priority.includes(issue.priority.toLowerCase())) &&
+      (filters.assignee.length === 0 || filters.assignee.includes(issue.assignee.toLowerCase())) &&
+      (filters.age.length === 0 || filters.age.includes(issue.ageBucket.toLowerCase())) &&
+      (filters.label.length === 0 || filters.label.some(function(l) { return labels.includes(l); }));
   });
 
   filteredIssues = matched;
@@ -406,11 +303,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  activeFilters = { type: [], status: [], priority: [], assignee: [], age: [], label: [] };
-  document.querySelectorAll('.pill.active').forEach(function(p) { p.classList.remove('active'); });
-  document.querySelectorAll('.pill-dd-item input').forEach(function(cb) { cb.checked = false; });
-  document.querySelectorAll('.pill-dd-btn').forEach(function(b) { b.classList.remove('has-selection'); b.textContent = 'Select ' + b.id.replace('ddbtn_', '') + '...'; });
-  document.getElementById('activeChips').innerHTML = '';
+  document.querySelectorAll('.ms-check').forEach(function(c) { c.checked = false; });
   applyFilters();
 }
 
